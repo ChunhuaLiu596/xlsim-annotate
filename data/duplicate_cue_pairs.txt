@@ -1,0 +1,53 @@
+12 exact (cueL1, cueL2) pairs appear in BOTH translation_parallel and simlex_swap.
+Both copies were kept in cue_pairs_preview.json/seeded to Supabase as distinct cue_ids.
+If computing IAA or reliability stats, be aware these represent the same underlying
+word judgment scored under two different cue_ids — decide whether to merge or compare them.
+
+boy (en) <-> niño (es):
+  - id=boy_spa1_niño  source=translation_parallel
+  - id=boy_spa_niño  source=simlex_swap
+
+club (en) <-> Verein (de):
+  - id=club_de2_verein  source=translation_parallel
+  - id=club_de_verein  source=simlex_swap
+
+doctor (en) <-> arts (nl):
+  - id=doctor_nl2_arts  source=translation_parallel
+  - id=doctor_nl_arts  source=simlex_swap
+
+doctor (en) <-> médico (es):
+  - id=doctor_spa2_médico  source=translation_parallel
+  - id=doctor_spa_médico  source=simlex_swap
+
+doctor (en) <-> 大夫 (zh):
+  - id=doctor_cmn3_大夫  source=translation_parallel
+  - id=doctor_cmn_大夫  source=simlex_swap
+
+easy (en) <-> einfach (de):
+  - id=easy_de1_einfach  source=translation_parallel
+  - id=easy_de_einfach  source=simlex_swap
+
+happy (en) <-> blij (nl):
+  - id=happy_nl1_blij  source=translation_parallel
+  - id=happy_nl_blij  source=simlex_swap
+
+happy (en) <-> 快乐 (zh):
+  - id=happy_cmn1_快乐  source=translation_parallel
+  - id=happy_cmn_快乐  source=simlex_swap
+
+happy (en) <-> 高兴 (zh):
+  - id=happy_cmn2_高兴  source=translation_parallel
+  - id=happy_cmn_高兴  source=simlex_swap
+
+know (en) <-> 理解 (zh):
+  - id=know_cmn_理解  source=simlex_swap
+  - id=know_cmn_理解_1  source=simlex_swap
+
+wonderful (en) <-> geweldig (nl):
+  - id=wonderful_nl1_geweldig  source=translation_parallel
+  - id=wonderful_nl_geweldig  source=simlex_swap
+
+wonderful (en) <-> 极好 (zh):
+  - id=wonderful_cmn4_极好  source=translation_parallel
+  - id=wonderful_cmn_极好  source=simlex_swap
+

@@ -1,0 +1,1138 @@
+[
+  {
+    "id": "出租车_taxi",
+    "cueL1": {
+      "w": "出租车",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "taxi",
+      "lang": "en"
+    },
+    "cols": [
+      "taxi",
+      "cab",
+      "yellow",
+      "driver",
+      "car",
+      "new york",
+      "city",
+      "fare",
+      "hail",
+      "ride",
+      "drive",
+      "black",
+      "meter",
+      "move",
+      "expensive",
+      "money"
+    ],
+    "rows": [
+      {
+        "w": "出租车",
+        "gloss": ""
+      },
+      {
+        "w": "司机",
+        "gloss": ""
+      },
+      {
+        "w": "滴滴",
+        "gloss": ""
+      },
+      {
+        "w": "打的",
+        "gloss": ""
+      },
+      {
+        "w": "的士",
+        "gloss": ""
+      },
+      {
+        "w": "乘客",
+        "gloss": ""
+      },
+      {
+        "w": "taxi",
+        "gloss": ""
+      },
+      {
+        "w": "打车",
+        "gloss": ""
+      },
+      {
+        "w": "贵",
+        "gloss": ""
+      },
+      {
+        "w": "黑车",
+        "gloss": ""
+      },
+      {
+        "w": "绿色",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "屋顶_ceiling",
+    "cueL1": {
+      "w": "屋顶",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "ceiling",
+      "lang": "en"
+    },
+    "cols": [
+      "ceiling",
+      "roof",
+      "white",
+      "floor",
+      "top",
+      "high",
+      "fan",
+      "up",
+      "glass",
+      "house",
+      "above",
+      "limit",
+      "tile",
+      "popcorn",
+      "paint",
+      "debt"
+    ],
+    "rows": [
+      {
+        "w": "屋顶",
+        "gloss": ""
+      },
+      {
+        "w": "瓦片",
+        "gloss": ""
+      },
+      {
+        "w": "周杰伦",
+        "gloss": ""
+      },
+      {
+        "w": "房子",
+        "gloss": ""
+      },
+      {
+        "w": "星空",
+        "gloss": ""
+      },
+      {
+        "w": "漏水",
+        "gloss": ""
+      },
+      {
+        "w": "房屋",
+        "gloss": ""
+      },
+      {
+        "w": "温岚",
+        "gloss": ""
+      },
+      {
+        "w": "房顶",
+        "gloss": ""
+      },
+      {
+        "w": "花园",
+        "gloss": ""
+      },
+      {
+        "w": "烟囱",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "天花板_roof",
+    "cueL1": {
+      "w": "天花板",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "roof",
+      "lang": "en"
+    },
+    "cols": [
+      "roof",
+      "house",
+      "top",
+      "ceiling",
+      "shingles",
+      "shingle",
+      "dog",
+      "tiles",
+      "fire",
+      "chimney",
+      "tile",
+      "shelter",
+      "mouth",
+      "rain",
+      "tin",
+      "hot"
+    ],
+    "rows": [
+      {
+        "w": "天花板",
+        "gloss": ""
+      },
+      {
+        "w": "白色",
+        "gloss": ""
+      },
+      {
+        "w": "地板",
+        "gloss": ""
+      },
+      {
+        "w": "灯",
+        "gloss": ""
+      },
+      {
+        "w": "吊顶",
+        "gloss": ""
+      },
+      {
+        "w": "高",
+        "gloss": ""
+      },
+      {
+        "w": "抬头",
+        "gloss": ""
+      },
+      {
+        "w": "白",
+        "gloss": ""
+      },
+      {
+        "w": "高度",
+        "gloss": ""
+      },
+      {
+        "w": "房顶",
+        "gloss": ""
+      },
+      {
+        "w": "吊灯",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "价值观_belief",
+    "cueL1": {
+      "w": "价值观",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "belief",
+      "lang": "en"
+    },
+    "cols": [
+      "belief",
+      "religion",
+      "god",
+      "faith",
+      "system",
+      "knowledge",
+      "thought",
+      "trust",
+      "truth",
+      "idea",
+      "dogma",
+      "conviction",
+      "christian",
+      "believe",
+      "tenet",
+      "atheism"
+    ],
+    "rows": [
+      {
+        "w": "价值观",
+        "gloss": ""
+      },
+      {
+        "w": "三观",
+        "gloss": ""
+      },
+      {
+        "w": "人生观",
+        "gloss": ""
+      },
+      {
+        "w": "世界观",
+        "gloss": ""
+      },
+      {
+        "w": "社会主义",
+        "gloss": ""
+      },
+      {
+        "w": "核心",
+        "gloss": ""
+      },
+      {
+        "w": "正确",
+        "gloss": ""
+      },
+      {
+        "w": "三观不正",
+        "gloss": ""
+      },
+      {
+        "w": "价值",
+        "gloss": ""
+      },
+      {
+        "w": "富强",
+        "gloss": ""
+      },
+      {
+        "w": "一致",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "赢_succeed",
+    "cueL1": {
+      "w": "赢",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "succeed",
+      "lang": "en"
+    },
+    "cols": [
+      "succeed",
+      "win",
+      "success",
+      "achieve",
+      "fail",
+      "accomplish",
+      "money",
+      "finish",
+      "work",
+      "complete",
+      "business",
+      "try",
+      "do well",
+      "happy",
+      "goal",
+      "best"
+    ],
+    "rows": [
+      {
+        "w": "赢",
+        "gloss": ""
+      },
+      {
+        "w": "输",
+        "gloss": ""
+      },
+      {
+        "w": "胜利",
+        "gloss": ""
+      },
+      {
+        "w": "比赛",
+        "gloss": ""
+      },
+      {
+        "w": "嬴政",
+        "gloss": ""
+      },
+      {
+        "w": "冠军",
+        "gloss": ""
+      },
+      {
+        "w": "输赢",
+        "gloss": ""
+      },
+      {
+        "w": "赢家",
+        "gloss": ""
+      },
+      {
+        "w": "高兴",
+        "gloss": ""
+      },
+      {
+        "w": "快乐",
+        "gloss": ""
+      },
+      {
+        "w": "政",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "球_glove",
+    "cueL1": {
+      "w": "球",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "glove",
+      "lang": "en"
+    },
+    "cols": [
+      "glove",
+      "hand",
+      "leather",
+      "mitten",
+      "cold",
+      "warm",
+      "fingers",
+      "winter",
+      "fit",
+      "finger",
+      "love",
+      "hands",
+      "mitt",
+      "warmth",
+      "box",
+      "baseball"
+    ],
+    "rows": [
+      {
+        "w": "球",
+        "gloss": ""
+      },
+      {
+        "w": "篮球",
+        "gloss": ""
+      },
+      {
+        "w": "足球",
+        "gloss": ""
+      },
+      {
+        "w": "圆",
+        "gloss": ""
+      },
+      {
+        "w": "地球",
+        "gloss": ""
+      },
+      {
+        "w": "皮球",
+        "gloss": ""
+      },
+      {
+        "w": "乒乓球",
+        "gloss": ""
+      },
+      {
+        "w": "圆的",
+        "gloss": ""
+      },
+      {
+        "w": "羽毛球",
+        "gloss": ""
+      },
+      {
+        "w": "运动",
+        "gloss": ""
+      },
+      {
+        "w": "球体",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "晚餐_chicken",
+    "cueL1": {
+      "w": "晚餐",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "chicken",
+      "lang": "en"
+    },
+    "cols": [
+      "chicken",
+      "egg",
+      "food",
+      "soup",
+      "bird",
+      "feathers",
+      "fried",
+      "meat",
+      "feather",
+      "eggs",
+      "dinner",
+      "rooster",
+      "wings",
+      "coward",
+      "breast",
+      "animal"
+    ],
+    "rows": [
+      {
+        "w": "晚餐",
+        "gloss": ""
+      },
+      {
+        "w": "烛光",
+        "gloss": ""
+      },
+      {
+        "w": "早餐",
+        "gloss": ""
+      },
+      {
+        "w": "红酒",
+        "gloss": ""
+      },
+      {
+        "w": "蜡烛",
+        "gloss": ""
+      },
+      {
+        "w": "肉",
+        "gloss": ""
+      },
+      {
+        "w": "吃",
+        "gloss": ""
+      },
+      {
+        "w": "吃饭",
+        "gloss": ""
+      },
+      {
+        "w": "浪漫",
+        "gloss": ""
+      },
+      {
+        "w": "家庭",
+        "gloss": ""
+      },
+      {
+        "w": "家人",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "快乐_happy",
+    "cueL1": {
+      "w": "快乐",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "happy",
+      "lang": "en"
+    },
+    "cols": [
+      "happy",
+      "sad",
+      "smile",
+      "glad",
+      "joy",
+      "content",
+      "joyful",
+      "cheerful",
+      "birthday",
+      "fun",
+      "satisfied",
+      "pleased",
+      "joyous",
+      "face",
+      "elated",
+      "love"
+    ],
+    "rows": [
+      {
+        "w": "快乐",
+        "gloss": ""
+      },
+      {
+        "w": "开心",
+        "gloss": ""
+      },
+      {
+        "w": "高兴",
+        "gloss": ""
+      },
+      {
+        "w": "幸福",
+        "gloss": ""
+      },
+      {
+        "w": "悲伤",
+        "gloss": ""
+      },
+      {
+        "w": "愉悦",
+        "gloss": ""
+      },
+      {
+        "w": "笑",
+        "gloss": ""
+      },
+      {
+        "w": "阳光",
+        "gloss": ""
+      },
+      {
+        "w": "愉快",
+        "gloss": ""
+      },
+      {
+        "w": "美食",
+        "gloss": ""
+      },
+      {
+        "w": "美好",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "雾_cloud",
+    "cueL1": {
+      "w": "雾",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "cloud",
+      "lang": "en"
+    },
+    "cols": [
+      "cloud",
+      "sky",
+      "rain",
+      "white",
+      "fluffy",
+      "blue",
+      "sun",
+      "fog",
+      "water",
+      "computing",
+      "nimbus",
+      "puffy",
+      "air",
+      "grey",
+      "shapes",
+      "internet"
+    ],
+    "rows": [
+      {
+        "w": "雾",
+        "gloss": ""
+      },
+      {
+        "w": "雾霾",
+        "gloss": ""
+      },
+      {
+        "w": "霾",
+        "gloss": ""
+      },
+      {
+        "w": "雨",
+        "gloss": ""
+      },
+      {
+        "w": "大雾",
+        "gloss": ""
+      },
+      {
+        "w": "天气",
+        "gloss": ""
+      },
+      {
+        "w": "朦胧",
+        "gloss": ""
+      },
+      {
+        "w": "风",
+        "gloss": ""
+      },
+      {
+        "w": "污染",
+        "gloss": ""
+      },
+      {
+        "w": "雾气",
+        "gloss": ""
+      },
+      {
+        "w": "北京",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "王子_king",
+    "cueL1": {
+      "w": "王子",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "king",
+      "lang": "en"
+    },
+    "cols": [
+      "king",
+      "queen",
+      "crown",
+      "ruler",
+      "prince",
+      "monarch",
+      "royalty",
+      "royal",
+      "kingdom",
+      "throne",
+      "kong",
+      "chess",
+      "knight",
+      "jack",
+      "rule",
+      "castle"
+    ],
+    "rows": [
+      {
+        "w": "王子",
+        "gloss": ""
+      },
+      {
+        "w": "公主",
+        "gloss": ""
+      },
+      {
+        "w": "青蛙",
+        "gloss": ""
+      },
+      {
+        "w": "白马",
+        "gloss": ""
+      },
+      {
+        "w": "王冠",
+        "gloss": ""
+      },
+      {
+        "w": "城堡",
+        "gloss": ""
+      },
+      {
+        "w": "童话",
+        "gloss": ""
+      },
+      {
+        "w": "骑士",
+        "gloss": ""
+      },
+      {
+        "w": "英国",
+        "gloss": ""
+      },
+      {
+        "w": "王国",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "大夫_doctor",
+    "cueL1": {
+      "w": "大夫",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "doctor",
+      "lang": "en"
+    },
+    "cols": [
+      "doctor",
+      "medicine",
+      "nurse",
+      "physician",
+      "hospital",
+      "lawyer",
+      "medical",
+      "patient",
+      "health",
+      "sick",
+      "who",
+      "surgeon",
+      "office",
+      "healer",
+      "medic",
+      "coat"
+    ],
+    "rows": [
+      {
+        "w": "大夫",
+        "gloss": ""
+      },
+      {
+        "w": "医生",
+        "gloss": ""
+      },
+      {
+        "w": "医院",
+        "gloss": ""
+      },
+      {
+        "w": "士大夫",
+        "gloss": ""
+      },
+      {
+        "w": "白大褂",
+        "gloss": ""
+      },
+      {
+        "w": "治病",
+        "gloss": ""
+      },
+      {
+        "w": "白色",
+        "gloss": ""
+      },
+      {
+        "w": "护士",
+        "gloss": ""
+      },
+      {
+        "w": "大丈夫",
+        "gloss": ""
+      },
+      {
+        "w": "救死扶伤",
+        "gloss": ""
+      },
+      {
+        "w": "白衣",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "女孩_child",
+    "cueL1": {
+      "w": "女孩",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "child",
+      "lang": "en"
+    },
+    "cols": [
+      "child",
+      "baby",
+      "kid",
+      "young",
+      "boy",
+      "infant",
+      "girl",
+      "small",
+      "children",
+      "parent",
+      "mother",
+      "toddler",
+      "son",
+      "play",
+      "offspring",
+      "innocent"
+    ],
+    "rows": [
+      {
+        "w": "女孩",
+        "gloss": ""
+      },
+      {
+        "w": "男孩",
+        "gloss": ""
+      },
+      {
+        "w": "可爱",
+        "gloss": ""
+      },
+      {
+        "w": "裙子",
+        "gloss": ""
+      },
+      {
+        "w": "漂亮",
+        "gloss": ""
+      },
+      {
+        "w": "美丽",
+        "gloss": ""
+      },
+      {
+        "w": "年轻",
+        "gloss": ""
+      },
+      {
+        "w": "青春",
+        "gloss": ""
+      },
+      {
+        "w": "长发",
+        "gloss": ""
+      },
+      {
+        "w": "少女",
+        "gloss": ""
+      },
+      {
+        "w": "辫子",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "课程_stomach",
+    "cueL1": {
+      "w": "课程",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "stomach",
+      "lang": "en"
+    },
+    "cols": [
+      "stomach",
+      "food",
+      "ache",
+      "belly",
+      "gut",
+      "tummy",
+      "acid",
+      "eat",
+      "hungry",
+      "pain",
+      "digest",
+      "flu",
+      "full",
+      "digestion",
+      "fat",
+      "organ"
+    ],
+    "rows": [
+      {
+        "w": "课程",
+        "gloss": ""
+      },
+      {
+        "w": "上课",
+        "gloss": ""
+      },
+      {
+        "w": "数学",
+        "gloss": ""
+      },
+      {
+        "w": "学习",
+        "gloss": ""
+      },
+      {
+        "w": "英语",
+        "gloss": ""
+      },
+      {
+        "w": "老师",
+        "gloss": ""
+      },
+      {
+        "w": "语文",
+        "gloss": ""
+      },
+      {
+        "w": "实验",
+        "gloss": ""
+      },
+      {
+        "w": "技能",
+        "gloss": ""
+      },
+      {
+        "w": "安排",
+        "gloss": ""
+      },
+      {
+        "w": "课程表",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "卧室_bicycle",
+    "cueL1": {
+      "w": "卧室",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "bicycle",
+      "lang": "en"
+    },
+    "cols": [
+      "bicycle",
+      "ride",
+      "wheel",
+      "wheels",
+      "bike",
+      "tricycle",
+      "fun",
+      "two",
+      "exercise",
+      "helmet",
+      "unicycle",
+      "chain",
+      "travel",
+      "pedal",
+      "cycle",
+      "queen"
+    ],
+    "rows": [
+      {
+        "w": "卧室",
+        "gloss": ""
+      },
+      {
+        "w": "床",
+        "gloss": ""
+      },
+      {
+        "w": "睡觉",
+        "gloss": ""
+      },
+      {
+        "w": "房间",
+        "gloss": ""
+      },
+      {
+        "w": "被子",
+        "gloss": ""
+      },
+      {
+        "w": "温馨",
+        "gloss": ""
+      },
+      {
+        "w": "安静",
+        "gloss": ""
+      },
+      {
+        "w": "枕头",
+        "gloss": ""
+      },
+      {
+        "w": "客厅",
+        "gloss": ""
+      },
+      {
+        "w": "舒服",
+        "gloss": ""
+      },
+      {
+        "w": "窗帘",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  },
+  {
+    "id": "聪明_dumb",
+    "cueL1": {
+      "w": "聪明",
+      "lang": "zh"
+    },
+    "cueL2": {
+      "w": "dumb",
+      "lang": "en"
+    },
+    "cols": [
+      "dumb",
+      "stupid",
+      "idiot",
+      "ass",
+      "mute",
+      "ignorant",
+      "unintelligent",
+      "dumber",
+      "deaf",
+      "smart",
+      "silly",
+      "silent",
+      "moron",
+      "person",
+      "dunce",
+      "thick"
+    ],
+    "rows": [
+      {
+        "w": "聪明",
+        "gloss": ""
+      },
+      {
+        "w": "机智",
+        "gloss": ""
+      },
+      {
+        "w": "智慧",
+        "gloss": ""
+      },
+      {
+        "w": "伶俐",
+        "gloss": ""
+      },
+      {
+        "w": "智商",
+        "gloss": ""
+      },
+      {
+        "w": "绝顶",
+        "gloss": ""
+      },
+      {
+        "w": "人",
+        "gloss": ""
+      },
+      {
+        "w": "天才",
+        "gloss": ""
+      },
+      {
+        "w": "可爱",
+        "gloss": ""
+      },
+      {
+        "w": "傻瓜",
+        "gloss": ""
+      },
+      {
+        "w": "聪慧",
+        "gloss": ""
+      }
+    ],
+    "gold": []
+  }
+]

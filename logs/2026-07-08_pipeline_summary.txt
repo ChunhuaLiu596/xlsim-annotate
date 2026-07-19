@@ -1,0 +1,194 @@
+Data pipeline summary — scripts/, what each does, inputs/outputs
+Written 2026-07-08. Re-read this before rerunning the pipeline later.
+
+============================================================
+PIPELINE ORDER (run top to bottom to rebuild everything)
+============================================================
+
+1. csv_to_cue_pairs.py       (debug/pilot data only, one-off)
+2. tsv_to_cue_pairs.py       (main converters, run once per source file)
+3. build_cue_pairs_preview.py (merges converter outputs -> the preview set)
+4. add_concreteness_column.py (adds concreteness onto the preview CSV)
+5. cue_pairs_stats.py         (reports + plots over the preview set)
+6. load_cue_pairs.js          (seeds Supabase from the final JSON — separate,
+                                run only when ready to push to the live DB)
+
+============================================================
+1. scripts/csv_to_cue_pairs.py
+============================================================
+Function:
+  Converts the small pilot file data/debug_pairs_cmn.csv (columns: word1,
+  word2, lang1_associations, lang2_associations, ...) into the cue-pair
+  JSON shape used everywhere downstream. One row in -> one cue pair out.
+  Drops hash-like garbage association tokens (regex-detected, e.g. stray
+  md5-looking strings found in the 王子/king row).
+
+Input:
+  data/debug_pairs_cmn.csv                  (15 rows)
+
+Output (stdout, redirect to a file):
+  JSON array of cue pairs: {id, cueL1, cueL2, cols, rows, gold}
+
+Usage:
+  python scripts/csv_to_cue_pairs.py data/debug_pairs_cmn.csv > /tmp/cue_pairs.json
+
+Note: this was the FIRST converter, used only for the 15-pair pilot/test
+seed. The two real data files (simlex, translation_parallel) use
+tsv_to_cue_pairs.py instead — different, richer source format.
+
+============================================================
+2. scripts/tsv_to_cue_pairs.py
+============================================================
+Function:
+  Converts the two real tab-separated source files into cue-pair JSON.
+  Two modes, one per file shape:
+
+  --mode translation_parallel
+    Input:  data/translation_parallel_complete_selected.csv
+    Shape:  one ENG anchor word per row + up to 5 candidate translations
+            per language (CMN 1-5, NL 1-5, SPA 1-5, DE 1-5), each with its
+            own "<slot>_Associations" column.
+    Logic:  each non-empty (ENG, <lang> N) slot becomes one cue pair
+            (cue1=ENG, cue2=that candidate). Skips slots missing a word or
+            an association list (162 skipped in the 2026-07-08 run).
+    Result: 3,297 cue pairs, tagged source="translation_parallel".
+
+  --mode simlex_swap
+    Input:  data/simlex_shared_english_anchor_complete_selected.csv
+    Shape:  one English word PAIR per row (ENG 1, ENG 2 — e.g.
+            "size"/"magnitude"), each translated into CMN/SPA/NL/DE.
+    Logic:  per user decision, builds SWAPPED cross-lingual pairs per
+            language: (ENG 1, <lang> 2) and (ENG 2, <lang> 1) — tests
+            whether the translated word preserves the ENG1<->ENG2
+            relationship. All 4 languages, both swap directions.
+    Result: 784 cue pairs (98 rows x 4 langs x 2 swaps), tagged
+            source="simlex_swap".
+
+Output (stdout, redirect to a file):
+  JSON array of cue pairs, each with an added "source" field.
+
+Usage:
+  python scripts/tsv_to_cue_pairs.py data/translation_parallel_complete_selected.csv \
+      --mode translation_parallel > /tmp/tp_pairs.json
+  python scripts/tsv_to_cue_pairs.py data/simlex_shared_english_anchor_complete_selected.csv \
+      --mode simlex_swap > /tmp/simlex_pairs.json
+
+============================================================
+3. scripts/build_cue_pairs_preview.py
+============================================================
+Function:
+  Merges any number of converter-output JSON files into one set, checks
+  for duplicate cue-pair IDs across inputs (aborts if found), and writes
+  both a JSON array (for seeding) and a flat CSV (for spreadsheet review).
+
+Input:
+  One or more JSON files from tsv_to_cue_pairs.py / csv_to_cue_pairs.py.
+
+Output:
+  data/cue_pairs_preview.json   (4,081 pairs, full row/col/gold detail)
+  data/cue_pairs_preview.csv    (flat: id, source, cueL1_word, cueL1_lang,
+                                  cueL2_word, cueL2_lang, n_rows, n_cols,
+                                  row_words, col_words — semicolon-joined)
+
+Usage:
+  python scripts/build_cue_pairs_preview.py /tmp/tp_pairs.json /tmp/simlex_pairs.json
+
+Known duplicates: 12 exact (cueL1,cueL2) pairs appear more than once across
+the merged set (both sources independently produced the same word pair, or
+one source produced it twice). Documented, NOT removed, in
+data/duplicate_cue_pairs.txt — see that file before computing IAA if you
+want to treat these as one judgment rather than two.
+
+============================================================
+4. scripts/add_concreteness_column.py
+============================================================
+Function:
+  Adds a cueL1_concreteness column to data/cue_pairs_preview.csv, matched
+  from Brysbaert et al. (2014) norms (Word, Conc.M; 1=abstract..5=concrete)
+  against cueL1_word (always the English side of every pair). Overwrites
+  the CSV in place. Leaves the column blank for unmatched words (none were
+  unmatched in the 2026-07-08 run — 4,081/4,081 matched, 100%).
+
+Input:
+  data/cue_pairs_preview.csv          (must already exist — run step 3 first)
+  data/Brysbaert2014_Concreteness.xlsx (Sheet1: Word, Conc.M, ...)
+
+Output:
+  data/cue_pairs_preview.csv, rewritten in place with the new column added.
+
+Usage:
+  python scripts/add_concreteness_column.py
+
+============================================================
+5. scripts/cue_pairs_stats.py
+============================================================
+Function:
+  One script, all distribution stats + the concreteness plot, over the
+  final data/cue_pairs_preview.csv (+ the two raw source files for fields
+  that don't carry into generated pairs, like PoS and semantic field).
+  Reports: pair count by source, by target language, matrix row/col size
+  distribution, SimLex PoS_x and similarity-score distribution,
+  translation_parallel Ontological_Category / Semantic_Field distribution,
+  and (if the concreteness column is present) the concreteness
+  distribution — both per-unique-word (primary) and per-pair (reference).
+
+Input:
+  data/cue_pairs_preview.csv (with cueL1_concreteness column — run step 4 first)
+  data/simlex_shared_english_anchor_complete_selected.csv
+  data/translation_parallel_complete_selected.csv
+
+Output:
+  logs/<date>_cue_pairs_stats.txt          (full text report)
+  logs/<date>_concreteness_distribution.png (histogram, unique-word level)
+
+Usage:
+  python scripts/cue_pairs_stats.py
+
+============================================================
+6. scripts/load_cue_pairs.js
+============================================================
+Function:
+  Seeds the cue_pairs table in Supabase from a converted JSON file, using
+  the SERVICE ROLE key (bypasses RLS — this is an admin/local-only step,
+  never run from the browser app). Upserts on id, so re-running with an
+  updated file is safe.
+
+Input:
+  A cue-pairs JSON file (e.g. data/cue_pairs_preview.json).
+  Env vars: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (export in your own
+  shell — never paste the secret key into chat or commit it to a file).
+
+Output:
+  Rows upserted into Supabase's public.cue_pairs table.
+
+Usage:
+  export SUPABASE_URL=https://<project-id>.supabase.co
+  export SUPABASE_SERVICE_ROLE_KEY="sb_secret_..."
+  node scripts/load_cue_pairs.js data/cue_pairs_preview.json 3
+  # 3rd arg = target_labels (how many annotators should see each pair)
+
+============================================================
+KEY NUMBERS FROM THE 2026-07-08 RUN
+============================================================
+Total cue pairs seeded/prepared: 4,081
+  - translation_parallel: 3,297 (80.8%)
+  - simlex_swap:            784 (19.2%)
+Target languages: zh 31.5%, es 23.3%, nl 22.8%, de 22.3%
+Matrix size: rows mean 19.8 (median 21), cols mean 14.3 (median 13)
+Concreteness (unique English anchors, n=715): mean 3.55, median 3.63 (1-5
+scale) — skewed concrete: 42.1% in the 4-5 band vs 10.9% in the 1-2 band.
+Duplicate cue pairs across sources: 12 (see data/duplicate_cue_pairs.txt)
+
+============================================================
+RELATED FILES (not scripts, but part of the same pipeline)
+============================================================
+data/debug_pairs_cmn.csv                              pilot/test source (15 rows)
+data/simlex_shared_english_anchor_complete_selected.csv  main source 1 (98 rows)
+data/translation_parallel_complete_selected.csv          main source 2 (594 rows)
+data/Brysbaert2014_Concreteness.xlsx                     concreteness norms (~40k words)
+data/cue_pairs_preview.json                              full converted+merged pairs
+data/cue_pairs_preview.csv                               flat version for spreadsheet review
+data/duplicate_cue_pairs.txt                             cross-source duplicate pair log
+supabase/schema.sql                                      cue_pairs / assignments tables +
+                                                          assign_cue_pairs() allocation function
+installation_readme.md                                   full Supabase setup + mechanism writeup

@@ -368,7 +368,6 @@ export default function App() {
     );
   }
 
-  const visibleRows = activeRow + 1;
   const pctPair = Math.round((activeRow / R) * 100);
   const labelWidth = labelColWidth(task.rows);
 
@@ -382,24 +381,33 @@ export default function App() {
       {!prolific.pid && backendReady && <div style={st.warn}>⚠ No PROLIFIC_PID in the URL — data will be keyed to an empty ID. This is expected only in local testing.</div>}
       {loadErr && <div style={st.warn}>⚠ Could not load your assignment from the server ({loadErr}) — showing demo data instead. Your work will not be saved correctly.</div>}
 
-      <div style={st.kicker}>Annotation matrix {pair + 1} of {CUE_PAIRS.length}</div>
-      <CuePairHeading cueL1={task.cueL1} cueL2={task.cueL2} />
+      <header style={st.taskToolbar}>
+        <div style={st.taskCuePair}>
+          <div>
+            <b style={{ ...st.taskCueWord, fontFamily: FONT_CJK }}>{task.cueL1.w}</b>
+            <span style={st.taskCueLanguage}>{languageName(task.cueL1.lang, "Language 1")}</span>
+          </div>
+          <span style={st.taskCueArrow}>↔</span>
+          <div>
+            <b style={st.taskCueWord}>{task.cueL2.w}</b>
+            <span style={st.taskCueLanguage}>{languageName(task.cueL2.lang, "English")}</span>
+          </div>
+        </div>
 
-      <div style={st.instruction}>
-        <span style={st.instructionLabel}>Your task</span>
-        In the context of the two cue words{" "}
-        <b style={{ fontFamily: FONT_CJK }}>{task.cueL1.w}</b> ↔ <b>{task.cueL2.w}</b>, each cell pairs a{" "}
-        {languageName(task.cueL1.lang, "Language 1")} association with an English one. For every cell, judge how <b>semantically equivalent</b> the
-        two cross-lingual associations are, and assign a score.
-      </div>
+        <div style={st.taskProgress}>
+          <span style={st.taskProgressText}>Matrix {pair + 1}/{CUE_PAIRS.length} · Row {activeRow + 1}/{R}</span>
+          <div style={st.taskProgressTrack}>
+            <div style={{ ...st.taskProgressFill, width: `${pctPair}%` }} />
+          </div>
+        </div>
 
-      <details style={st.referenceGuide}>
-        <summary style={st.referenceSummary}>Review the four scoring levels</summary>
-        <div style={{ paddingTop: 12 }}>
+        <details style={st.taskGuide}>
+          <summary style={st.taskGuideSummary}>Scoring guide ⚙</summary>
+          <div style={st.taskGuideBody}>
           {INSTRUCTION_SECTIONS.map((section) => {
             const band = bandOf(section.score);
             return (
-              <div key={section.score} style={{ ...st.referenceRow, marginBottom: 16 }}>
+              <div key={section.score} style={{ ...st.referenceRow, marginBottom: 12 }}>
                 <span style={{ ...st.referenceScore, background: band.c, color: band.ink }}>
                   {section.score.toFixed(1)}
                 </span>
@@ -415,61 +423,62 @@ export default function App() {
           <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.5 }}>
             {SCORING_DISCIPLINE.map((rule) => <li key={rule} style={{ marginBottom: 4 }}>{rule}</li>)}
           </ul>
-        </div>
-      </details>
+          </div>
+        </details>
+      </header>
 
-      <div style={st.progWrap}>
-        <div style={st.progBar}><div style={{ ...st.progFill, width: `${pctPair}%` }} /></div>
-        <span style={st.progTxt}>Matrix {pair + 1}/{CUE_PAIRS.length} · Row {activeRow + 1}/{R}</span>
-      </div>
+      <p style={st.taskPrompt}>Select a cell, then press 1–4 to score. Blank cells are saved as 0 when you advance.</p>
 
-      <div style={st.gate}>
-        <strong>Tip:</strong> only click cells that are <b>not</b> zero — blanks are saved as <b>0 (None)</b> on
-        row advance. Active cell <b style={{ fontFamily: FONT_CJK }}>{task.rows[activeRow].w}</b> × <b>{task.cols[col]}</b>:
-        is there <em>any</em> context where a translation of one replaces the other, meaning kept?
-      </div>
-
-      <div style={st.gridScroll}>
+      <div style={{ ...st.gridScroll, ...st.taskGridScroll }}>
         <table style={{ ...st.table, tableLayout: "fixed" }}>
+          <colgroup>
+            <col style={{ width: labelWidth }} />
+            {task.cols.map((cw) => <col key={cw} style={{ width: 78 }} />)}
+          </colgroup>
           <thead>
             <tr>
-              <th style={{ ...st.corner, width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth }} />
+              <th rowSpan={2} style={{ ...st.taskAxisHead, width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth }}>
+                {languageName(task.cueL1.lang, "Language 1")}
+              </th>
+              <th colSpan={C} style={st.taskAssociationHead}>
+                {languageName(task.cueL2.lang, "English")} associations
+              </th>
+            </tr>
+            <tr>
               {task.cols.map((cw, c) => (
-                <th key={cw} style={{ ...st.colHead, ...(c === col ? st.headActive : {}), ...(c === 0 ? st.colHeadCue : {}) }}>
+                <th key={cw} style={{ ...st.colHead, ...st.taskColHead, ...(c === col ? st.headActive : {}), ...(c === 0 ? st.colHeadCue : {}) }}>
                   {cw}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {task.rows.slice(0, visibleRows).map((rw, r) => {
-              const state = r < activeRow ? "done" : "active";
+            {task.rows.slice(0, activeRow + 1).map((rw, r) => {
+              const isActiveRow = r === activeRow;
               return (
-                <tr key={rw.w} ref={state === "active" ? activeRef : null}>
-                  <th style={{ ...st.rowHead, width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth, ...(state === "active" ? st.headActive : {}), ...(r === 0 ? st.rowHeadCue : {}) }}>
+                <tr key={rw.w} ref={isActiveRow ? activeRef : null}>
+                  <th style={{ ...st.rowHead, width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth, ...(isActiveRow ? st.headActive : {}), ...(r === 0 ? st.rowHeadCue : {}) }}>
                     <span style={{ display: "block", fontFamily: FONT_CJK, fontSize: 17, fontWeight: 700 }}>{rw.w}</span>
-                    <span style={st.rowHeadGloss}>{rw.gloss}</span>
                   </th>
                   {task.cols.map((cw, c) => {
-                    const v = explicit(r, c) ?? (state === "done" ? 0.0 : undefined);
+                    const v = explicit(r, c);
                     const b = v !== undefined ? bandOf(v) : null;
-                    const editable = state === "active";
-                    const isCol = editable && c === col;
-                    const isHover = editable && c === hoverCol;
+                    const isCol = isActiveRow && c === col;
+                    const isHover = isActiveRow && c === hoverCol;
                     return (
                       <td key={cw}
-                        onClick={editable ? () => setCol(c) : undefined}
-                        onMouseEnter={editable ? () => setHoverCol(c) : undefined}
-                        onMouseLeave={editable ? () => setHoverCol((current) => (current === c ? null : current)) : undefined}
+                        onClick={isActiveRow ? () => setCol(c) : undefined}
+                        onMouseEnter={isActiveRow ? () => setHoverCol(c) : undefined}
+                        onMouseLeave={isActiveRow ? () => setHoverCol((current) => (current === c ? null : current)) : undefined}
                         style={{
-                          ...st.cell,
+                          ...st.taskCell,
                           ...(b ? { background: b.c, color: b.ink } : {}),
-                          ...(state === "done" && v === 0 ? st.cellZero : {}),
+                          ...(v === 0 ? st.cellZero : {}),
                           ...(isHover && !isCol ? st.cellHover : {}),
                           ...(isCol && !b ? st.cellCursor : {}),
-                          cursor: editable ? "pointer" : "default",
+                          cursor: isActiveRow ? "pointer" : "default",
                         }}>
-                        {v !== undefined ? (v === 0 ? "·" : v.toFixed(1)) : ""}
+                        {v !== undefined && v !== 0 ? v.toFixed(1) : ""}
                       </td>
                     );
                   })}
@@ -480,22 +489,21 @@ export default function App() {
         </table>
       </div>
 
-      <div style={st.pad}>
-        {BANDS.map((b) => (
-          <button key={b.v} onClick={() => setCell(col, b.v)} style={{ ...st.padBtn, borderColor: b.c }}>
-            <span style={{ ...st.padKey, background: b.c, color: b.ink }}>{b.key}</span>
-            <span style={st.padVal}>{b.v.toFixed(1)}</span>
-            <span style={st.padLabel}>{b.label}</span>
-            <span style={st.padBlurb}>{b.blurb}</span>
-          </button>
-        ))}
-      </div>
-
-      <div style={st.nav}>
-        <span style={st.hint}><kbd style={st.kbd}>1</kbd>–<kbd style={st.kbd}>4</kbd> mark · <kbd style={st.kbd}>←</kbd><kbd style={st.kbd}>→</kbd> move · <kbd style={st.kbd}>Enter</kbd> next (blanks→0)</span>
+      <div style={st.taskBottomBar}>
+        <span style={st.taskSaveStatus}>{saveErr ? "⚠ Save issue" : backendReady ? "✓ Saved on row advance" : "Preview mode"}</span>
+        <span style={st.hint}>Keys: <kbd style={st.kbd}>1</kbd> <kbd style={st.kbd}>2</kbd> <kbd style={st.kbd}>3</kbd> <kbd style={st.kbd}>4</kbd> · <kbd style={st.kbd}>Enter</kbd> next · <kbd style={st.kbd}>←</kbd><kbd style={st.kbd}>→</kbd> move</span>
+        <div style={st.taskScoreButtons}>
+          {BANDS.map((b) => (
+            <button key={b.v} onClick={() => setCell(col, b.v)} style={{ ...st.taskScoreButton, borderColor: b.c }}>
+              <span style={{ ...st.taskScoreKey, color: b.ink }}>{b.key}</span>
+              <span style={st.taskScoreLabel}>{b.label}</span>
+              <span style={st.taskScoreValue}>{b.v.toFixed(1)}</span>
+            </button>
+          ))}
+        </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button
-            style={st.secondary}
+            style={{ ...st.secondary, padding: "10px 14px" }}
             onClick={() => {
               setIntroStartPage(3);
               setStage("intro");
@@ -503,7 +511,7 @@ export default function App() {
           >
             ← Back to instructions
           </button>
-          <button style={st.primary} onClick={advance}>
+          <button style={{ ...st.primary, ...st.taskNextButton }} onClick={advance}>
             {activeRow + 1 < R ? "Next row →" : pair + 1 < CUE_PAIRS.length ? "Next matrix →" : "Finish"}
           </button>
         </div>
@@ -1028,17 +1036,23 @@ function Practice({ examples, onBack, onComplete }) {
   return (
     <Shell wide>
       <div style={{ padding: "20px 0 60px" }}>
-        <div style={st.kicker}>{example.label}</div>
-        <CuePairHeading cueL1={example.cueL1} cueL2={example.cueL2} />
-        <p style={st.lead}>{example.context}</p>
-
-        <details style={st.referenceGuide}>
-          <summary style={st.referenceSummary}>Click to review the full instruction on four scoring levels</summary>
-          <div style={{ paddingTop: 12 }}>
+        <header style={st.taskToolbar}>
+          <div style={st.taskCuePair}>
+            <div><b style={{ ...st.taskCueWord, fontFamily: FONT_CJK }}>{example.cueL1.w}</b><span style={st.taskCueLanguage}>{languageName(example.cueL1.lang, "Language 1")}</span></div>
+            <span style={st.taskCueArrow}>↔</span>
+            <div><b style={st.taskCueWord}>{example.cueL2.w}</b><span style={st.taskCueLanguage}>{languageName(example.cueL2.lang, "English")}</span></div>
+          </div>
+          <div style={st.taskProgress}>
+            <span style={st.taskProgressText}>Practice {exampleIndex + 1}/{examples.length} · Row {Math.min(activeRow + 1, example.rows.length)}/{example.rows.length}</span>
+            <div style={st.taskProgressTrack}><div style={{ ...st.taskProgressFill, width: `${showFeedback ? 100 : (activeRow / example.rows.length) * 100}%` }} /></div>
+          </div>
+          <details style={st.taskGuide}>
+            <summary style={st.taskGuideSummary}>Scoring guide ⚙</summary>
+            <div style={st.taskGuideBody}>
             {INSTRUCTION_SECTIONS.map((section) => {
               const band = bandOf(section.score);
               return (
-                <div key={section.score} style={{ ...st.referenceRow, marginBottom: 16 }}>
+                <div key={section.score} style={{ ...st.referenceRow, marginBottom: 12 }}>
                   <span style={{ ...st.referenceScore, background: band.c, color: band.ink }}>
                     {section.score.toFixed(1)}
                   </span>
@@ -1054,26 +1068,13 @@ function Practice({ examples, onBack, onComplete }) {
             <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.5 }}>
               {SCORING_DISCIPLINE.map((rule) => <li key={rule} style={{ marginBottom: 4 }}>{rule}</li>)}
             </ul>
-          </div>
-        </details>
+            </div>
+          </details>
+        </header>
 
-        <div style={st.progWrap}>
-          <div style={st.progBar}>
-            <div style={{ ...st.progFill, width: `${showFeedback ? 100 : (activeRow / example.rows.length) * 100}%` }} />
-          </div>
-          <span style={st.progTxt}>
-            Practice matrix {exampleIndex + 1}/{examples.length} · Row {Math.min(activeRow + 1, example.rows.length)}/{example.rows.length}
-          </span>
-        </div>
+        <p style={st.taskPrompt}><b>{example.label}:</b> {example.context} Select a cell, then press 1–4 to score.</p>
 
-        {!showFeedback && (
-          <div style={st.gate}>
-            <strong>Practice:</strong> score the active row exactly as in the real task. Only mark non-zero relationships;
-            blanks become 0 when you advance.
-          </div>
-        )}
-
-        <div style={st.gridScroll}>
+        <div style={{ ...st.gridScroll, ...st.taskGridScroll }}>
           <table style={{ ...st.table, tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: labelWidth }} />
@@ -1081,9 +1082,16 @@ function Practice({ examples, onBack, onComplete }) {
             </colgroup>
             <thead>
               <tr>
-                <th style={{ ...st.corner, width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth }} />
+                <th rowSpan={2} style={{ ...st.taskAxisHead, width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth }}>
+                  {languageName(example.cueL1.lang, "Language 1")}
+                </th>
+                <th colSpan={example.cols.length} style={st.taskAssociationHead}>
+                  {languageName(example.cueL2.lang, "English")} associations
+                </th>
+              </tr>
+              <tr>
                 {example.cols.map((word, c) => (
-                  <th key={word} style={{ ...st.colHead, ...(!showFeedback && !rowFeedback && c === col ? st.headActive : {}), ...(c === 0 ? st.colHeadCue : {}) }}>
+                  <th key={word} style={{ ...st.colHead, ...st.taskColHead, ...(!showFeedback && !rowFeedback && c === col ? st.headActive : {}), ...(c === 0 ? st.colHeadCue : {}) }}>
                     {word}
                   </th>
                 ))}
@@ -1113,7 +1121,7 @@ function Practice({ examples, onBack, onComplete }) {
                           onMouseEnter={editable ? () => setHoverCol(c) : undefined}
                           onMouseLeave={editable ? () => setHoverCol((current) => (current === c ? null : current)) : undefined}
                           style={{
-                            ...st.cell,
+                            ...st.taskCell,
                             ...(band ? { background: band.c, color: band.ink } : {}),
                             ...(state === "done" && value === 0 ? st.cellZero : {}),
                             ...(isHover && !isCol ? st.cellHover : {}),
@@ -1122,7 +1130,7 @@ function Practice({ examples, onBack, onComplete }) {
                             cursor: editable ? "pointer" : "default",
                           }}
                         >
-                          {value !== undefined ? (value === 0 ? "·" : value.toFixed(1)) : ""}
+                          {value !== undefined && value !== 0 ? value.toFixed(1) : ""}
                         </td>
                       );
                     })}
@@ -1134,29 +1142,25 @@ function Practice({ examples, onBack, onComplete }) {
         </div>
 
         {!showFeedback && !rowFeedback && (
-          <>
-            <div style={st.pad}>
+          <div style={st.taskBottomBar}>
+            <span style={st.taskSaveStatus}>Practice mode</span>
+            <span style={st.hint}>Keys: <kbd style={st.kbd}>1</kbd> <kbd style={st.kbd}>2</kbd> <kbd style={st.kbd}>3</kbd> <kbd style={st.kbd}>4</kbd> · <kbd style={st.kbd}>Enter</kbd> next</span>
+            <div style={st.taskScoreButtons}>
               {BANDS.map((band) => (
-                <button key={band.v} onClick={() => setCell(col, band.v)} style={{ ...st.padBtn, borderColor: band.c }}>
-                  <span style={{ ...st.padKey, background: band.c, color: band.ink }}>{band.key}</span>
-                  <span style={st.padVal}>{band.v.toFixed(1)}</span>
-                  <span style={st.padLabel}>{band.label}</span>
-                  <span style={st.padBlurb}>{band.blurb}</span>
+                <button key={band.v} onClick={() => setCell(col, band.v)} style={{ ...st.taskScoreButton, borderColor: band.c }}>
+                  <span style={{ ...st.taskScoreKey, color: band.ink }}>{band.key}</span>
+                  <span style={st.taskScoreLabel}>{band.label}</span>
+                  <span style={st.taskScoreValue}>{band.v.toFixed(1)}</span>
                 </button>
               ))}
             </div>
-            <div style={st.nav}>
-              <span style={st.hint}>
-                <kbd style={st.kbd}>1</kbd>–<kbd style={st.kbd}>4</kbd> mark ·
-                <kbd style={st.kbd}>←</kbd><kbd style={st.kbd}>→</kbd> move ·
-                <kbd style={st.kbd}>Enter</kbd> next
-              </span>
-              <button style={st.primary} onClick={advanceRow}>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={{ ...st.secondary, padding: "10px 14px" }} onClick={onBack}>← Back to instructions</button>
+              <button style={{ ...st.primary, ...st.taskNextButton }} onClick={advanceRow}>
                 {activeRow + 1 < example.rows.length ? "Next row →" : "Check my matrix →"}
               </button>
             </div>
-            <button style={{ ...st.secondary, marginTop: 14 }} onClick={onBack}>← Back to instructions</button>
-          </>
+          </div>
         )}
 
         {rowFeedback && (
@@ -1314,20 +1318,23 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
   return (
     <Shell wide>
       <div style={{ padding: "20px 0 60px" }}>
-        <div style={st.kicker}>Qualification test · Attempt {attempt}</div>
-        <CuePairHeading cueL1={testExample.cueL1} cueL2={testExample.cueL2} />
-        <p style={st.lead}>
-          Complete this short matrix independently. You must pass before beginning the real task. You will be told
-          whether you passed, but the correct answers will not be shown.  If they are not correct, you can update the update the scores directly or review the instructions and practice examples before trying again.
-        </p>
-
-        <details style={st.referenceGuide}>
-          <summary style={st.referenceSummary}>Click to review the four scoring levels</summary>
-          <div style={{ paddingTop: 12 }}>
+        <header style={st.taskToolbar}>
+          <div style={st.taskCuePair}>
+            <div><b style={{ ...st.taskCueWord, fontFamily: FONT_CJK }}>{testExample.cueL1.w}</b><span style={st.taskCueLanguage}>{languageName(testExample.cueL1.lang, "Language 1")}</span></div>
+            <span style={st.taskCueArrow}>↔</span>
+            <div><b style={st.taskCueWord}>{testExample.cueL2.w}</b><span style={st.taskCueLanguage}>{languageName(testExample.cueL2.lang, "English")}</span></div>
+          </div>
+          <div style={st.taskProgress}>
+            <span style={st.taskProgressText}>Qualification test · Attempt {attempt} · Row {Math.min(activeRow + 1, testExample.rows.length)}/{testExample.rows.length}</span>
+            <div style={st.taskProgressTrack}><div style={{ ...st.taskProgressFill, width: `${result ? 100 : (activeRow / testExample.rows.length) * 100}%` }} /></div>
+          </div>
+          <details style={st.taskGuide}>
+            <summary style={st.taskGuideSummary}>Scoring guide ⚙</summary>
+            <div style={st.taskGuideBody}>
             {INSTRUCTION_SECTIONS.map((section) => {
               const band = bandOf(section.score);
               return (
-                <div key={section.score} style={{ ...st.referenceRow, marginBottom: 16 }}>
+                <div key={section.score} style={{ ...st.referenceRow, marginBottom: 12 }}>
                   <span style={{ ...st.referenceScore, background: band.c, color: band.ink }}>
                     {section.score.toFixed(1)}
                   </span>
@@ -1343,8 +1350,11 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
             <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.5 }}>
               {SCORING_DISCIPLINE.map((rule) => <li key={rule} style={{ marginBottom: 4 }}>{rule}</li>)}
             </ul>
-          </div>
-        </details>
+            </div>
+          </details>
+        </header>
+
+        <p style={st.taskPrompt}>Complete this matrix independently. You must pass before beginning the real task. Select a cell, then press 1–4 to score.</p>
 
         {result === "failed" && (
           <div style={{ ...st.practiceFeedback, ...st.practiceFeedbackError }}>
@@ -1360,21 +1370,7 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
           </div>
         )}
 
-        {!result && (
-          <>
-            <div style={st.progWrap}>
-              <div style={st.progBar}>
-                <div style={{ ...st.progFill, width: `${(activeRow / testExample.rows.length) * 100}%` }} />
-              </div>
-              <span style={st.progTxt}>Row {activeRow + 1}/{testExample.rows.length}</span>
-            </div>
-            <div style={st.gate}>
-              Only mark non-zero relationships. Blank cells are recorded as 0 when you advance.
-            </div>
-          </>
-        )}
-
-        <div style={st.gridScroll}>
+        <div style={{ ...st.gridScroll, ...st.taskGridScroll }}>
           <table style={{ ...st.table, tableLayout: "fixed" }}>
             <colgroup>
               <col style={{ width: labelWidth }} />
@@ -1382,9 +1378,16 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
             </colgroup>
             <thead>
               <tr>
-                <th style={{ ...st.corner, width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth }} />
+                <th rowSpan={2} style={{ ...st.taskAxisHead, width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth }}>
+                  {languageName(testExample.cueL1.lang, "Language 1")}
+                </th>
+                <th colSpan={testExample.cols.length} style={st.taskAssociationHead}>
+                  {languageName(testExample.cueL2.lang, "English")} associations
+                </th>
+              </tr>
+              <tr>
                 {testExample.cols.map((word, c) => (
-                  <th key={word} style={{ ...st.colHead, ...(!result && c === col ? st.headActive : {}), ...(c === 0 ? st.colHeadCue : {}) }}>
+                  <th key={word} style={{ ...st.colHead, ...st.taskColHead, ...(!result && c === col ? st.headActive : {}), ...(c === 0 ? st.colHeadCue : {}) }}>
                     {word}
                   </th>
                 ))}
@@ -1418,14 +1421,14 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
                           onMouseEnter={editable ? () => setHoverCell({ r, c }) : undefined}
                           onMouseLeave={editable ? () => setHoverCell((current) => (current?.r === r && current?.c === c ? null : current)) : undefined}
                           style={{
-                            ...st.cell,
+                            ...st.taskCell,
                             ...(band ? { background: band.c, color: band.ink } : isCol ? { background: "#efece5" } : {}),
                             ...(done && value === 0 ? st.cellZero : {}),
                             ...(shadows.length ? { boxShadow: shadows.join(", ") } : {}),
                             cursor: editable ? "pointer" : "default",
                           }}
                         >
-                          {value !== undefined ? (value === 0 ? "·" : value.toFixed(1)) : ""}
+                          {value !== undefined && value !== 0 ? value.toFixed(1) : ""}
                         </td>
                       );
                     })}
@@ -1437,34 +1440,34 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
         </div>
 
         {!result && (
-          <>
-            <div style={st.pad}>
+          <div style={st.taskBottomBar}>
+            <span style={st.taskSaveStatus}>Qualification test</span>
+            <span style={st.hint}>Keys: <kbd style={st.kbd}>1</kbd> <kbd style={st.kbd}>2</kbd> <kbd style={st.kbd}>3</kbd> <kbd style={st.kbd}>4</kbd> · <kbd style={st.kbd}>Enter</kbd> next</span>
+            <div style={st.taskScoreButtons}>
               {BANDS.map((band) => (
-                <button key={band.v} onClick={() => setCell(col, band.v)} style={{ ...st.padBtn, borderColor: band.c }}>
-                  <span style={{ ...st.padKey, background: band.c, color: band.ink }}>{band.key}</span>
-                  <span style={st.padVal}>{band.v.toFixed(1)}</span>
-                  <span style={st.padLabel}>{band.label}</span>
-                  <span style={st.padBlurb}>{band.blurb}</span>
+                <button key={band.v} onClick={() => setCell(col, band.v)} style={{ ...st.taskScoreButton, borderColor: band.c }}>
+                  <span style={{ ...st.taskScoreKey, color: band.ink }}>{band.key}</span>
+                  <span style={st.taskScoreLabel}>{band.label}</span>
+                  <span style={st.taskScoreValue}>{band.v.toFixed(1)}</span>
                 </button>
               ))}
             </div>
-            <div style={st.nav}>
-              <button style={st.secondary} onClick={onBack}>← Back to practice</button>
-              <button style={st.primary} onClick={advance}>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button style={{ ...st.secondary, padding: "10px 14px" }} onClick={onBack}>← Back to practice</button>
+              <button style={{ ...st.primary, ...st.taskNextButton }} onClick={advance}>
                 {activeRow + 1 < testExample.rows.length ? "Next row →" : "Submit test →"}
               </button>
             </div>
-          </>
+          </div>
         )}
 
         {result === "failed" && editingCorrections && (
-          <div style={{ ...st.pad, marginTop: 18 }}>
+          <div style={{ ...st.taskScoreButtons, marginTop: 18 }}>
             {BANDS.map((band) => (
-              <button key={band.v} onClick={() => setCell(col, band.v)} style={{ ...st.padBtn, borderColor: band.c }}>
-                <span style={{ ...st.padKey, background: band.c, color: band.ink }}>{band.key}</span>
-                <span style={st.padVal}>{band.v.toFixed(1)}</span>
-                <span style={st.padLabel}>{band.label}</span>
-                <span style={st.padBlurb}>{band.blurb}</span>
+              <button key={band.v} onClick={() => setCell(col, band.v)} style={{ ...st.taskScoreButton, borderColor: band.c }}>
+                <span style={{ ...st.taskScoreKey, color: band.ink }}>{band.key}</span>
+                <span style={st.taskScoreLabel}>{band.label}</span>
+                <span style={st.taskScoreValue}>{band.v.toFixed(1)}</span>
               </button>
             ))}
           </div>
@@ -1764,6 +1767,33 @@ const st = {
   referenceSummary: { color: "#26292e", fontWeight: 800, cursor: "pointer" },
   referenceRow: { display: "grid", gridTemplateColumns: "42px 1fr", gap: 10, alignItems: "start", marginBottom: 9, lineHeight: 1.45 },
   referenceScore: { display: "grid", placeItems: "center", minHeight: 26, borderRadius: 6, fontSize: 12, fontWeight: 800 },
+
+  taskToolbar: { position: "sticky", top: 0, zIndex: 30, display: "grid", gridTemplateColumns: "minmax(220px,1fr) minmax(220px,320px) minmax(160px,1fr)", alignItems: "center", gap: 24, background: "rgba(255,255,255,.98)", border: "1px solid #e3e0d8", borderRadius: 12, padding: "14px 16px", marginBottom: 14, boxShadow: "0 5px 18px rgba(38,41,46,.08)" },
+  taskCuePair: { display: "grid", gridTemplateColumns: "max-content 34px max-content", alignItems: "start", width: "fit-content" },
+  taskCueWord: { display: "block", fontSize: 22, lineHeight: 1.05 },
+  taskCueLanguage: { display: "block", marginTop: 4, color: "#6b727c", fontSize: 10.5, lineHeight: 1.2 },
+  taskCueArrow: { paddingTop: 2, color: "#4b515a", fontSize: 20, textAlign: "center" },
+  taskProgress: { minWidth: 0 },
+  taskProgressText: { display: "block", color: "#26292e", fontSize: 13, fontWeight: 700, marginBottom: 8 },
+  taskProgressTrack: { height: 6, overflow: "hidden", background: "#eceae4", borderRadius: 99 },
+  taskProgressFill: { height: "100%", background: "#176b68", borderRadius: 99, transition: "width .3s ease" },
+  taskGuide: { position: "relative", justifySelf: "end", color: "#176b68" },
+  taskGuideSummary: { listStyle: "none", cursor: "pointer", fontSize: 13, fontWeight: 800, whiteSpace: "nowrap" },
+  taskGuideBody: { position: "absolute", zIndex: 20, top: 30, right: 0, width: 460, maxHeight: "70vh", overflowY: "auto", background: "#fff", color: "#4b515a", border: "1px solid #d8d4ca", borderRadius: 12, padding: 18, boxShadow: "0 12px 32px rgba(38,41,46,.16)" },
+  taskPrompt: { margin: "0 0 12px", color: "#5b636e", fontSize: 13 },
+  taskGridScroll: { maxHeight: "calc(100vh - 285px)", overflow: "auto", overscrollBehavior: "contain" },
+  taskAxisHead: { position: "sticky", top: 0, left: 0, zIndex: 8, padding: "12px 14px", background: "#f7f8f6", color: "#26292e", borderRight: "1px solid #e3e0d8", borderBottom: "1px solid #e3e0d8", textAlign: "left", fontSize: 13, fontWeight: 700 },
+  taskAssociationHead: { position: "sticky", top: 0, zIndex: 6, height: 34, padding: "7px 10px", background: "#fff", color: "#26292e", borderBottom: "1px solid #e3e0d8", fontSize: 13, fontWeight: 700, textAlign: "center" },
+  taskColHead: { position: "sticky", top: 34, zIndex: 5 },
+  taskCell: { width: 78, minWidth: 78, height: 70, textAlign: "center", fontSize: 15, fontWeight: 800, borderBottom: "1px solid #e7e4dc", borderRight: "1px solid #e7e4dc", transition: "background .1s, box-shadow .1s", userSelect: "none", background: "#fff" },
+  taskBottomBar: { position: "sticky", bottom: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", background: "rgba(255,255,255,.97)", border: "1px solid #e3e0d8", borderRadius: 12, padding: "12px 14px", boxShadow: "0 -6px 20px rgba(38,41,46,.07)" },
+  taskSaveStatus: { color: "#176b68", fontSize: 14, fontWeight: 800, whiteSpace: "nowrap" },
+  taskScoreButtons: { display: "grid", gridTemplateColumns: "repeat(4, minmax(82px,1fr))", gap: 8 },
+  taskScoreButton: { display: "grid", gridTemplateColumns: "24px 1fr", columnGap: 7, rowGap: 2, alignItems: "center", minWidth: 100, background: "#fff", border: "1.5px solid", borderRadius: 7, padding: "9px 11px", textAlign: "left" },
+  taskScoreKey: { fontSize: 17, lineHeight: 1, fontWeight: 800 },
+  taskScoreLabel: { color: "#26292e", fontSize: 13, fontWeight: 750, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
+  taskScoreValue: { gridColumn: "1 / -1", color: "#26292e", fontSize: 13, lineHeight: 1.2, textAlign: "center" },
+  taskNextButton: { background: "#176b68", minHeight: 52, padding: "11px 20px" },
 
   progWrap: { display: "flex", alignItems: "center", gap: 12, marginBottom: 14 },
   progBar: { flex: 1, height: 6, background: "#e3e0d8", borderRadius: 99, overflow: "hidden" },

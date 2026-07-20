@@ -2,7 +2,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from
 import { CUE_PAIRS as DEMO_CUE_PAIRS, OFFLINE_CUE_PAIRS_BY_LANGUAGE, QC, BANDS } from "./taskData.js";
 import {
   INSTRUCTION_SECTIONS, SCORING_DISCIPLINE,
-  PRACTICE_EXAMPLES_BY_LANGUAGE, TEST_EXAMPLES_BY_LANGUAGE,
+  INSTRUCTION_EXAMPLES_BY_LANGUAGE, PRACTICE_EXAMPLES_BY_LANGUAGE, TEST_EXAMPLES_BY_LANGUAGE,
 } from "./instructions.js";
 import { backendReady } from "./supabase.js";
 import {
@@ -21,6 +21,7 @@ const LANGUAGE_NAMES = {
   es: "Spanish",
 };
 const languageName = (language, fallback) => LANGUAGE_NAMES[language] || language || fallback;
+const cueLanguageName = (language, fallback) => `${languageName(language, fallback)} Cue`;
 
 // Rough px-per-character estimate (CJK glyphs render roughly 2x as wide as Latin ones at this font size).
 const textWidthPx = (text = "") => {
@@ -77,12 +78,12 @@ function CuePairHeading({ cueL1, cueL2 }) {
       <h1 style={st.cuePairTitle}>
         <span>
           <span style={st.cuePairWord}>{cueL1.w}</span>
-          <span style={st.cuePairLanguage}>{leftLanguage}</span>
+          <span style={st.cuePairLanguage}>{leftLanguage} Cue</span>
         </span>
         <span style={st.cuePairArrow}>↔</span>
         <span>
           <span style={st.cuePairWord}>{cueL2.w}</span>
-          <span style={st.cuePairLanguage}>{rightLanguage}</span>
+          <span style={st.cuePairLanguage}>{rightLanguage} Cue</span>
         </span>
       </h1>
       <AxisCueCaption cueL1={cueL1} cueL2={cueL2} />
@@ -143,12 +144,18 @@ export default function App() {
   const [col, setCol] = useState(0);
   const [hoverCol, setHoverCol] = useState(null);
   const [showMatrixOverview, setShowMatrixOverview] = useState(false);
+  const [mainLayout, setMainLayout] = useState("hybrid");
+  const [autoAdvance, setAutoAdvance] = useState(true);
+  const [pressedScore, setPressedScore] = useState(null);
+  const [hybridScrollPercent, setHybridScrollPercent] = useState(0);
   const [prolific] = useState(getProlificParams);
   const [t0] = useState(Date.now());
   const [matrixEnter, setMatrixEnter] = useState(Date.now());
   const [saveErr, setSaveErr] = useState(null);
   const liveRef = useRef(null);
   const activeRef = useRef(null);
+  const hybridScrollRef = useRef(null);
+  const pressedScoreTimerRef = useRef(null);
 
   useLayoutEffect(() => {
     document.documentElement.scrollTop = 0;
@@ -194,6 +201,15 @@ export default function App() {
 
   useEffect(() => { activeRef.current?.scrollIntoView({ block: "center", behavior: "smooth" }); }, [activeRow, pair]);
 
+  useEffect(() => {
+    if (mainLayout !== "hybrid") return;
+    hybridScrollRef.current
+      ?.querySelector(`[data-hybrid-col="${col}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [col, activeRow, mainLayout]);
+
+  useEffect(() => () => window.clearTimeout(pressedScoreTimerRef.current), []);
+
   const setCell = useCallback((c, v) => {
     setScores((s) => ({ ...s, [key(activeRow, c)]: v }));
     if (liveRef.current) liveRef.current.textContent =
@@ -233,6 +249,35 @@ export default function App() {
   const previousCell = () => {
     if (col > 0) { setCol(col - 1); return; }
     if (activeRow > 0) { setActiveRow(activeRow - 1); setCol(C - 1); }
+  };
+
+  const scoreHybridCell = (c, value) => {
+    setCell(c, value);
+    setPressedScore(value);
+    window.clearTimeout(pressedScoreTimerRef.current);
+    pressedScoreTimerRef.current = window.setTimeout(() => setPressedScore(null), 650);
+    if (autoAdvance && c + 1 < C) setCol(c + 1);
+  };
+
+  const fillRemainingRowWithZero = () => {
+    setScores((current) => {
+      const next = { ...current };
+      for (let c = 0; c < C; c++) {
+        const k = key(activeRow, c);
+        if (next[k] === undefined) next[k] = 0.0;
+      }
+      return next;
+    });
+  };
+
+  const finishCurrentRow = async () => {
+    await commitRow(activeRow);
+    if (activeRow + 1 < R) { setActiveRow(activeRow + 1); setCol(0); return; }
+    if (pair + 1 < CUE_PAIRS.length) {
+      setPair(pair + 1); setActiveRow(0); setCol(0); setMatrixEnter(Date.now());
+    } else {
+      await finalize();
+    }
   };
 
   // ---- gold QC over everything scored so far ----
@@ -284,15 +329,16 @@ export default function App() {
     if (stage !== "task") return;
     const h = (e) => {
       const b = BANDS.find((x) => x.key === e.key);
-      if (b) { e.preventDefault(); setCell(col, b.v); return; }
+      if (b) { e.preventDefault(); mainLayout === "hybrid" ? scoreHybridCell(col, b.v) : setCell(col, b.v); return; }
       if (e.key === "ArrowRight") { e.preventDefault(); setCol((c) => Math.min(c + 1, C - 1)); }
       else if (e.key === "ArrowLeft") { e.preventDefault(); setCol((c) => Math.max(c - 1, 0)); }
-      else if (e.key === "Enter") { e.preventDefault(); advance(); }
+      else if (e.key.toLowerCase() === "s") { e.preventDefault(); setCol((c) => Math.min(c + 1, C - 1)); }
+      else if (e.key === "Enter") { e.preventDefault(); mainLayout === "hybrid" ? setCol((c) => Math.min(c + 1, C - 1)) : advance(); }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, col, activeRow, pair, setCell, C]);
+  }, [stage, col, activeRow, pair, setCell, C, mainLayout, autoAdvance]);
 
   if (stage === "loading") {
     return (
@@ -384,13 +430,135 @@ export default function App() {
   return (
     <>
       {devNav}
-      <Shell wide>
+      <Shell wide fluid={mainLayout === "hybrid"}>
       <div ref={liveRef} aria-live="polite" style={st.sr} />
 
       {!backendReady && <div style={st.warn}>⚠ Backend not configured — running in preview mode, nothing is being saved. Set Supabase env vars before launching.</div>}
       {!prolific.pid && backendReady && <div style={st.warn}>⚠ No PROLIFIC_PID in the URL — data will be keyed to an empty ID. This is expected only in local testing.</div>}
       {loadErr && <div style={st.warn}>⚠ Could not load your assignment from the server ({loadErr}) — showing demo data instead. Your work will not be saved correctly.</div>}
 
+      {mainLayout === "hybrid" && (
+        <div style={{ ...st.hybridPage, ...(devNavEnabled ? { paddingRight: 150 } : {}) }}>
+          <header style={st.hybridTopBar}>
+            <span>Matrix {pair + 1} of {CUE_PAIRS.length}</span>
+            <div style={st.pairCellProgress}>
+              <span>Row {activeRow + 1} of {R}</span>
+              <div style={st.taskProgressTrack}><div style={{ ...st.taskProgressFill, width: `${(activeRow / R) * 100}%` }} /></div>
+            </div>
+            <div style={st.hybridTopActions}>
+              <details style={st.taskGuide}>
+                <summary style={st.pairGuideSummary}>▣&nbsp; Scoring guide</summary>
+                <div style={st.taskGuideBody}>
+                  {INSTRUCTION_SECTIONS.map((section) => {
+                    const band = bandOf(section.score);
+                    return <div key={section.score} style={{ ...st.referenceRow, marginBottom: 12 }}><span style={{ ...st.referenceScore, background: band.c, color: band.ink }}>{section.score.toFixed(1)}</span><div><b>{section.title}</b><p style={{ margin: "3px 0 6px" }}>{section.summary}</p><InstructionLists section={section} /></div></div>;
+                  })}
+                </div>
+              </details>
+              <button type="button" style={st.secondary} onClick={() => setMainLayout("pairs")}>Pair-by-pair layout</button>
+            </div>
+          </header>
+
+          <div style={st.hybridCuePair}>
+            <div><b style={{ ...st.pairCueWord, fontFamily: FONT_CJK }}>{task.cueL1.w}</b><span style={st.pairLanguage}>{cueLanguageName(task.cueL1.lang, "Language 1")}</span></div>
+            <span style={st.pairArrow}>↔</span>
+            <div><b style={st.pairCueWord}>{task.cueL2.w}</b><span style={st.pairLanguage}>{cueLanguageName(task.cueL2.lang, "English")}</span></div>
+          </div>
+
+          <div style={st.hybridColumns}>
+            <section style={st.hybridPanel}>
+              <h2 style={st.hybridPanelTitle}>Matrix overview</h2>
+              <p style={st.hybridPanelLead}>Click any cell, or use ← → to move through pairs.</p>
+              <div style={st.hybridScrollCue}>← Scroll horizontally to review every association →</div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="1"
+                value={hybridScrollPercent}
+                aria-label="Scroll matrix horizontally"
+                style={st.hybridScrollRange}
+                onChange={(event) => {
+                  const percent = Number(event.target.value);
+                  setHybridScrollPercent(percent);
+                  const scroller = hybridScrollRef.current;
+                  if (scroller) scroller.scrollLeft = ((scroller.scrollWidth - scroller.clientWidth) * percent) / 100;
+                }}
+              />
+              <div
+                ref={hybridScrollRef}
+                className="hybrid-matrix-scroll"
+                style={st.hybridMatrixScroll}
+                onScroll={(event) => {
+                  const scroller = event.currentTarget;
+                  const maximum = scroller.scrollWidth - scroller.clientWidth;
+                  setHybridScrollPercent(maximum > 0 ? Math.round((scroller.scrollLeft / maximum) * 100) : 0);
+                }}
+              >
+                <table style={st.hybridTable}>
+                  <thead><tr><th style={st.hybridRowLabelCell} />{task.cols.map((word, c) => <th key={word} style={{ ...st.hybridColHead, ...(c === 0 ? st.hybridCueHeader : {}) }}>{word}</th>)}</tr></thead>
+                  <tbody>
+                    {task.rows.slice(0, activeRow + 1).map((row, r) => (
+                      <tr key={row.w} style={r === activeRow ? st.hybridActiveRow : undefined}>
+                        <th style={{ ...st.hybridRowLabelCell, ...(r === 0 ? st.rowHeadCue : {}) }}>{row.w}</th>
+                        {task.cols.map((word, c) => {
+                          const value = explicit(r, c);
+                          const band = value !== undefined ? bandOf(value) : null;
+                          const selected = r === activeRow && c === col;
+                          return (
+                            <td key={word} style={st.hybridCellWrap}>
+                              <button
+                                type="button"
+                                data-hybrid-col={r === activeRow ? c : undefined}
+                                disabled={r !== activeRow}
+                                onClick={() => setCol(c)}
+                                style={{ ...st.hybridCell, ...(band && value !== 0 ? { background: `${band.c}18`, color: value === 1 ? "#176b58" : value === 0.8 ? "#3f754c" : "#ad6d00" } : {}), ...(selected ? st.hybridSelectedCell : {}) }}
+                              >
+                                {value !== undefined ? value.toFixed(1) : ""}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <button type="button" style={st.hybridFillButton} onClick={fillRemainingRowWithZero}>Set remaining unreviewed cells in this row to 0.0 →</button>
+              <p style={st.hybridHelp}>Use after scanning the complete row.</p>
+              <div style={st.hybridLegend}><span>Blank: unreviewed</span><span><b style={st.hybridLegendScored}>1.0</b> Value: scored</span><span><b style={st.hybridLegendZero}>0</b> confirmed none</span></div>
+            </section>
+
+            <section style={st.hybridPanel}>
+              <div style={st.hybridScoreHead}><h2 style={st.hybridPanelTitle}>Score current pair</h2><span style={st.hybridColumnCount}>Column {col + 1} of {C}</span></div>
+              <div style={st.hybridPairNav}><button style={st.pairPrevious} onClick={() => setCol((c) => Math.max(0, c - 1))}>← Previous</button><b>{task.cols[col]} · {col + 1} of {C}</b><button style={st.pairPrevious} onClick={() => setCol((c) => Math.min(C - 1, c + 1))}>Next →</button></div>
+              <div style={st.hybridCurrentPair}><b style={{ fontFamily: FONT_CJK }}>{task.rows[activeRow].w}</b><span>↔</span><b>{task.cols[col]}</b><small style={{ gridColumn: "1 / -1", marginTop: 8, fontSize: 11.5, fontWeight: 400 }}>{isCueCueCell ? "These are the cue words that anchor the matrix." : "Could one replace the other while keeping the meaning?"}</small></div>
+              <div aria-live="polite" style={{ ...st.hybridScoreConfirmation, ...(pressedScore !== null ? st.hybridScoreConfirmationVisible : {}) }}>
+                {pressedScore !== null ? `✓ ${pressedScore.toFixed(1)} ${bandOf(pressedScore).label.trim()} recorded` : "Choose a score"}
+              </div>
+              <div style={st.hybridScores}>
+                {BANDS.map((band) => {
+                  const accent = band.v === 1 ? "#176b58" : band.v === 0.8 ? "#3f754c" : band.v === 0.5 ? "#ad6d00" : "#4b515a";
+                  const selected = currentValue === band.v;
+                  const justPressed = pressedScore === band.v;
+                  return <button key={band.v} onClick={() => scoreHybridCell(col, band.v)} style={{ ...st.hybridScoreOption, borderColor: band.c, ...(selected || justPressed ? { background: `${band.c}18`, boxShadow: `inset 0 0 0 ${justPressed ? 3 : 2}px ${accent}`, transform: justPressed ? "scale(1.012)" : "none" } : {}) }}><span style={st.pairPress}>Press <b style={{ ...st.pairPressKey, color: accent }}>{band.key}</b></span><strong style={{ color: accent }}>{band.v.toFixed(1)}</strong><strong style={{ color: accent }}>{band.label}</strong><span>{band.blurb}</span></button>;
+                })}
+              </div>
+              <label style={st.hybridAutoAdvance}><input type="checkbox" checked={autoAdvance} onChange={(e) => setAutoAdvance(e.target.checked)} /> After scoring, automatically move to the next cell →</label>
+              <button type="button" style={st.hybridSkip} onClick={() => setCol((c) => Math.min(C - 1, c + 1))}><kbd style={st.kbd}>S</kbd><span><b>Skip for now</b><small>Leave unreviewed and move right</small></span></button>
+              <div style={st.hybridKeys}><kbd style={st.kbd}>←</kbd><kbd style={st.kbd}>→</kbd> move · <kbd style={st.kbd}>1–4</kbd> score & advance · <kbd style={st.kbd}>S</kbd> skip</div>
+            </section>
+          </div>
+
+          <footer style={st.hybridFooter}>
+            <span style={st.taskSaveStatus}>{saveErr ? "⚠ Save issue" : backendReady ? "✓ Autosaved" : "Preview mode"}</span>
+            <div style={st.hybridLegend}><span>Blank: unreviewed</span><span><b style={st.hybridLegendScored}>1.0</b> Value: scored</span><span><b style={st.hybridLegendZero}>0</b> confirmed none</span></div>
+            <button type="button" style={st.pairNext} onClick={finishCurrentRow}>Finish row →</button>
+          </footer>
+        </div>
+      )}
+
+      {mainLayout === "pairs" && (<>
       <header style={st.pairTopBar}>
         <span style={st.pairMatrixCount}>Matrix {pair + 1} of {CUE_PAIRS.length}</span>
         <div style={st.pairCellProgress}>
@@ -426,11 +594,12 @@ export default function App() {
       <main style={st.pairPage}>
         <div style={st.pairCueLabel}>Cue words</div>
         <div style={st.pairCuePair}>
-          <div><b style={{ ...st.pairCueWord, fontFamily: FONT_CJK }}>{task.cueL1.w}</b><span style={st.pairLanguage}>{languageName(task.cueL1.lang, "Language 1")}</span></div>
+          <div><b style={{ ...st.pairCueWord, fontFamily: FONT_CJK }}>{task.cueL1.w}</b><span style={st.pairLanguage}>{cueLanguageName(task.cueL1.lang, "Language 1")}</span></div>
           <span style={st.pairArrow}>↔</span>
-          <div><b style={st.pairCueWord}>{task.cueL2.w}</b><span style={st.pairLanguage}>{languageName(task.cueL2.lang, "English")}</span></div>
+          <div><b style={st.pairCueWord}>{task.cueL2.w}</b><span style={st.pairLanguage}>{cueLanguageName(task.cueL2.lang, "English")}</span></div>
         </div>
         <button type="button" style={st.pairOverviewLink} onClick={() => setShowMatrixOverview(true)}>Open matrix overview</button>
+        <button type="button" style={st.pairOverviewLink} onClick={() => setMainLayout("hybrid")}>Try row-by-row layout</button>
 
         <section style={st.pairQuestionCard}>
           <h1 style={st.pairQuestionTitle}>{isCueCueCell ? "How equivalent are these cue words?" : "How equivalent are these associations?"}</h1>
@@ -486,9 +655,9 @@ export default function App() {
           <div style={st.matrixView}>
             <header style={st.matrixViewToolbar}>
               <div style={st.taskCuePair}>
-                <div><b style={{ ...st.taskCueWord, fontFamily: FONT_CJK }}>{task.cueL1.w}</b><span style={st.taskCueLanguage}>{languageName(task.cueL1.lang, "Language 1")}</span></div>
+                <div><b style={{ ...st.taskCueWord, fontFamily: FONT_CJK }}>{task.cueL1.w}</b><span style={st.taskCueLanguage}>{cueLanguageName(task.cueL1.lang, "Language 1")}</span></div>
                 <span style={st.taskCueArrow}>↔</span>
-                <div><b style={st.taskCueWord}>{task.cueL2.w}</b><span style={st.taskCueLanguage}>{languageName(task.cueL2.lang, "English")}</span></div>
+                <div><b style={st.taskCueWord}>{task.cueL2.w}</b><span style={st.taskCueLanguage}>{cueLanguageName(task.cueL2.lang, "English")}</span></div>
               </div>
               <div style={st.taskProgress}>
                 <span style={st.taskProgressText}>Matrix {pair + 1}/{CUE_PAIRS.length} · Row {activeRow + 1}/{R}</span>
@@ -553,6 +722,7 @@ export default function App() {
           </div>
         </div>
       )}
+      </>)}
       </Shell>
     </>
   );
@@ -610,6 +780,81 @@ function ExampleMatrixTable({ matrix, highlightCorner }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function HybridInstructionExample({ example }) {
+  const previewCols = example.cols.slice(0, 3);
+  const row = example.rows[0];
+  return (
+    <div style={st.instructionUiExample}>
+      <div style={st.instructionUiHeader}>
+        <span>Matrix 1 of 5</span>
+        <div style={st.instructionUiProgress}>
+          <b>Row 1 of {example.rows.length}</b>
+          <span style={st.instructionUiProgressTrack}><i style={st.instructionUiProgressFill} /></span>
+        </div>
+        <b style={{ color: "#176b68" }}>Scoring guide</b>
+      </div>
+
+      <div style={st.instructionUiCuePair}>
+        <div><b style={{ fontFamily: FONT_CJK }}>{example.cueL1.w}</b><small style={st.instructionUiLanguage}>{cueLanguageName(example.cueL1.lang, "Language 1")}</small></div>
+        <span>↔</span>
+        <div><b>{example.cueL2.w}</b><small style={st.instructionUiLanguage}>{cueLanguageName(example.cueL2.lang, "English")}</small></div>
+      </div>
+
+      <div style={st.instructionUiColumns}>
+        <section style={st.instructionUiPanel}>
+          <h3 style={st.instructionUiTitle}>Matrix overview</h3>
+          <p style={st.instructionUiLead}>Select a cell, or use ← → to move through the current row.</p>
+          <div style={st.instructionUiScrollLabel}>← Scroll horizontally to review every association →</div>
+          <div style={st.instructionUiScrollBar}><span /></div>
+          <div style={{ overflow: "hidden" }}>
+            <table style={st.instructionUiTable}>
+              <thead>
+                <tr>
+                  <th />
+                  {previewCols.map((word, index) => (
+                    <th key={word} style={index === 0 ? st.hybridCueHeader : undefined}>{word}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th style={st.instructionUiRowCue}>{row.w}</th>
+                  {previewCols.map((word, index) => (
+                    <td key={word}><span style={index === 0 ? st.instructionUiSelectedCell : st.instructionUiBlankCell} /></td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <button type="button" tabIndex={-1} style={st.instructionUiConfirm}>
+            Confirm remaining unreviewed cells as 0.0 and finish row →
+          </button>
+          <div style={st.instructionUiLegend}>
+            <span>Blank = unreviewed</span><span><b>1.0/0.8/0.5</b> = scored</span><span><b>0.0</b> = confirmed none</span>
+          </div>
+        </section>
+
+        <section style={st.instructionUiPanel}>
+          <h3 style={st.instructionUiTitle}>Score current pair</h3>
+          <div style={st.instructionUiPairCard}>
+            <b style={{ fontFamily: FONT_CJK }}>{row.w}</b><span>↔</span><b>{previewCols[0]}</b>
+          </div>
+          <div style={st.instructionUiScores}>
+            {BANDS.map((band) => (
+              <div key={band.v} style={{ ...st.instructionUiScore, borderColor: band.c }}>
+                <span>Press <b>{band.key}</b></span>
+                <strong>{band.v.toFixed(1)}</strong>
+                <b>{band.label}</b>
+              </div>
+            ))}
+          </div>
+          <div style={st.instructionUiAutoAdvance}>☑ After scoring, move to the next cell</div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -947,6 +1192,153 @@ function Feedback({ onSubmit }) {
   );
 }
 
+function HybridPhaseScorer({
+  phaseLabel, cueL1, cueL2, rows, cols, activeRow, col, valueAt,
+  onSelectCol, onScore, onPrevious, onNext, onFillRemaining, onFinish,
+  finishLabel, autoAdvance, onAutoAdvanceChange,
+}) {
+  const scrollRef = useRef(null);
+  const [scrollPercent, setScrollPercent] = useState(0);
+  const [pressedScore, setPressedScore] = useState(null);
+  const timerRef = useRef(null);
+  const currentValue = valueAt(activeRow, col);
+  const cueCell = activeRow === 0 && col === 0;
+
+  useEffect(() => () => window.clearTimeout(timerRef.current), []);
+  useEffect(() => {
+    scrollRef.current?.querySelector(`[data-phase-col="${col}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+  }, [col, activeRow]);
+
+  const score = (band) => {
+    onScore(band.v);
+    setPressedScore(band.v);
+    window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setPressedScore(null), 650);
+    if (autoAdvance && col + 1 < cols.length) onSelectCol(col + 1);
+  };
+
+  return (
+    <div style={st.hybridPage}>
+      <header style={st.hybridTopBar}>
+        <span>{phaseLabel}</span>
+        <div style={st.pairCellProgress}>
+          <span>Row {activeRow + 1} of {rows.length}</span>
+          <div style={st.taskProgressTrack}><div style={{ ...st.taskProgressFill, width: `${(activeRow / rows.length) * 100}%` }} /></div>
+        </div>
+        <details style={{ ...st.taskGuide, justifySelf: "end" }}>
+          <summary style={st.pairGuideSummary}>▣&nbsp; Scoring guide</summary>
+          <div style={st.taskGuideBody}>
+            {INSTRUCTION_SECTIONS.map((section) => {
+              const band = bandOf(section.score);
+              return <div key={section.score} style={{ ...st.referenceRow, marginBottom: 12 }}><span style={{ ...st.referenceScore, background: band.c, color: band.ink }}>{section.score.toFixed(1)}</span><div><b>{section.title}</b><p style={{ margin: "3px 0 6px" }}>{section.summary}</p><InstructionLists section={section} /></div></div>;
+            })}
+          </div>
+        </details>
+      </header>
+
+      <div style={st.hybridCuePair}>
+        <div><b style={{ ...st.pairCueWord, fontFamily: FONT_CJK }}>{cueL1.w}</b><span style={st.pairLanguage}>{cueLanguageName(cueL1.lang, "Language 1")}</span></div>
+        <span style={st.pairArrow}>↔</span>
+        <div><b style={st.pairCueWord}>{cueL2.w}</b><span style={st.pairLanguage}>{cueLanguageName(cueL2.lang, "English")}</span></div>
+      </div>
+
+      <div style={st.hybridColumns}>
+        <section style={st.hybridPanel}>
+          <h2 style={st.hybridPanelTitle}>Matrix overview</h2>
+          <p style={st.hybridPanelLead}>Click any cell in the current row, or use ← → to move through pairs.</p>
+          <div style={st.hybridScrollCue}>← Scroll horizontally to review every association →</div>
+          <input type="range" min="0" max="100" value={scrollPercent} aria-label="Scroll matrix horizontally" style={st.hybridScrollRange} onChange={(event) => { const percent = Number(event.target.value); setScrollPercent(percent); const el = scrollRef.current; if (el) el.scrollLeft = ((el.scrollWidth - el.clientWidth) * percent) / 100; }} />
+          <div ref={scrollRef} className="hybrid-matrix-scroll" style={st.hybridMatrixScroll} onScroll={(event) => { const el = event.currentTarget; const max = el.scrollWidth - el.clientWidth; setScrollPercent(max > 0 ? Math.round((el.scrollLeft / max) * 100) : 0); }}>
+            <table style={st.hybridTable}>
+              <thead><tr><th style={st.hybridRowLabelCell} />{cols.map((word, c) => <th key={word} style={{ ...st.hybridColHead, ...(c === 0 ? st.hybridCueHeader : {}) }}>{word}</th>)}</tr></thead>
+              <tbody>{rows.slice(0, activeRow + 1).map((row, r) => <tr key={row.w} style={r === activeRow ? st.hybridActiveRow : undefined}><th style={{ ...st.hybridRowLabelCell, ...(r === 0 ? st.rowHeadCue : {}) }}>{row.w}</th>{cols.map((word, c) => { const value = valueAt(r, c); const band = value !== undefined ? bandOf(value) : null; return <td key={word} style={st.hybridCellWrap}><button type="button" data-phase-col={r === activeRow ? c : undefined} disabled={r !== activeRow} onClick={() => onSelectCol(c)} style={{ ...st.hybridCell, ...(band && value !== 0 ? { background: `${band.c}18`, color: value === 1 ? "#176b58" : value === 0.8 ? "#3f754c" : "#ad6d00" } : {}), ...(r === activeRow && c === col ? st.hybridSelectedCell : {}) }}>{value !== undefined ? value.toFixed(1) : ""}</button></td>; })}</tr>)}</tbody>
+            </table>
+          </div>
+          <button type="button" style={st.hybridFillButton} onClick={onFillRemaining}>Set remaining unreviewed cells in this row to 0.0 →</button>
+          <p style={st.hybridHelp}>Use after scanning the complete row.</p>
+          <div style={st.hybridLegend}><span>Blank: unreviewed</span><span><b style={st.hybridLegendScored}>1.0</b> Value: scored</span><span><b style={st.hybridLegendZero}>0</b> confirmed none</span></div>
+        </section>
+
+        <section style={st.hybridPanel}>
+          <div style={st.hybridScoreHead}><h2 style={st.hybridPanelTitle}>Score current pair</h2><span style={st.hybridColumnCount}>Column {col + 1} of {cols.length}</span></div>
+          <div style={st.hybridPairNav}><button style={st.pairPrevious} onClick={onPrevious}>← Previous</button><b>{cols[col]} · {col + 1} of {cols.length}</b><button style={st.pairPrevious} onClick={onNext}>Next →</button></div>
+          <div style={st.hybridCurrentPair}><b style={{ fontFamily: FONT_CJK }}>{rows[activeRow].w}</b><span>↔</span><b>{cols[col]}</b><small style={{ gridColumn: "1 / -1", marginTop: 8, fontSize: 11.5, fontWeight: 400 }}>{cueCell ? "These are the cue words that anchor the matrix." : "Could one replace the other while keeping the meaning?"}</small></div>
+          <div aria-live="polite" style={{ ...st.hybridScoreConfirmation, ...(pressedScore !== null ? st.hybridScoreConfirmationVisible : {}) }}>{pressedScore !== null ? `✓ ${pressedScore.toFixed(1)} ${bandOf(pressedScore).label.trim()} recorded` : "Choose a score"}</div>
+          <div style={st.hybridScores}>{BANDS.map((band) => { const accent = band.v === 1 ? "#176b58" : band.v === 0.8 ? "#3f754c" : band.v === 0.5 ? "#ad6d00" : "#4b515a"; const selected = currentValue === band.v; const flash = pressedScore === band.v; return <button key={band.v} onClick={() => score(band)} style={{ ...st.hybridScoreOption, borderColor: band.c, ...(selected || flash ? { background: `${band.c}18`, boxShadow: `inset 0 0 0 ${flash ? 3 : 2}px ${accent}` } : {}) }}><span style={st.pairPress}>Press <b style={{ ...st.pairPressKey, color: accent }}>{band.key}</b></span><strong style={{ color: accent }}>{band.v.toFixed(1)}</strong><strong style={{ color: accent }}>{band.label}</strong><span>{band.blurb}</span></button>; })}</div>
+          <label style={st.hybridAutoAdvance}><input type="checkbox" checked={autoAdvance} onChange={(event) => onAutoAdvanceChange(event.target.checked)} /> After scoring, automatically move to the next cell →</label>
+          <button type="button" style={st.hybridSkip} onClick={onNext}><kbd style={st.kbd}>S</kbd><span><b>Skip for now</b><small>Leave unreviewed and move right</small></span></button>
+          <div style={st.hybridKeys}><kbd style={st.kbd}>←</kbd><kbd style={st.kbd}>→</kbd> move · <kbd style={st.kbd}>1–4</kbd> score & advance · <kbd style={st.kbd}>S</kbd> skip</div>
+        </section>
+      </div>
+
+      <footer style={st.hybridFooter}><span style={st.taskSaveStatus}>✓ Progress retained</span><div style={st.hybridLegend}><span>Blank: unreviewed</span><span><b style={st.hybridLegendScored}>1.0</b> Value: scored</span><span><b style={st.hybridLegendZero}>0</b> confirmed none</span></div><button type="button" style={st.pairNext} onClick={onFinish}>{finishLabel}</button></footer>
+    </div>
+  );
+}
+
+function PracticeFeedbackMatrix({ example, activeRow, valueAt, currentRowResults = [], showAllRows = false }) {
+  const feedbackByColumn = new Map(currentRowResults.map((result) => [result.c, result]));
+  const lastVisibleRow = showAllRows ? example.rows.length - 1 : activeRow;
+  return (
+    <section style={st.practiceFeedbackMatrix}>
+      <div style={st.practiceFeedbackMatrixHead}>
+        <div>
+          <h2 style={st.hybridPanelTitle}>Matrix progress</h2>
+          <p style={{ ...st.hybridPanelLead, marginBottom: 0 }}>
+            Completed rows remain visible. Green cells are correct; red cells need review.
+          </p>
+        </div>
+        <b>{showAllRows ? "Completed matrix" : `Row ${activeRow + 1} of ${example.rows.length}`}</b>
+      </div>
+      <div style={st.hybridScrollCue}>← Scroll horizontally to review every association →</div>
+      <div className="hybrid-matrix-scroll" style={st.hybridMatrixScroll}>
+        <table style={st.hybridTable}>
+          <thead>
+            <tr>
+              <th style={st.hybridRowLabelCell} />
+              {example.cols.map((word, c) => (
+                <th key={word} style={{ ...st.hybridColHead, ...(c === 0 ? st.hybridCueHeader : {}) }}>{word}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {example.rows.slice(0, lastVisibleRow + 1).map((row, r) => (
+              <tr key={row.w} style={!showAllRows && r === activeRow ? st.hybridActiveRow : undefined}>
+                <th style={{ ...st.hybridRowLabelCell, ...(r === 0 ? st.rowHeadCue : {}) }}>{row.w}</th>
+                {example.cols.map((word, c) => {
+                  const value = valueAt(r, c);
+                  const band = value !== undefined ? bandOf(value) : null;
+                  const feedback = showAllRows
+                    ? { correct: (value ?? 0.0) === example.answers[r][c] }
+                    : r === activeRow ? feedbackByColumn.get(c) : null;
+                  return (
+                    <td key={word} style={st.hybridCellWrap}>
+                      <div
+                        style={{
+                          ...st.hybridCell,
+                          display: "grid",
+                          placeItems: "center",
+                          ...(band && value !== 0 ? {
+                            background: `${band.c}18`,
+                            color: value === 1 ? "#176b58" : value === 0.8 ? "#3f754c" : "#ad6d00",
+                          } : {}),
+                          ...(feedback ? (feedback.correct ? st.practiceFeedbackCellCorrect : st.practiceFeedbackCellError) : {}),
+                        }}
+                      >
+                        {value !== undefined ? value.toFixed(1) : ""}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function Practice({ examples, onBack, onComplete }) {
   const [exampleIndex, setExampleIndex] = useState(0);
   const [activeRow, setActiveRow] = useState(0);
@@ -956,6 +1348,7 @@ function Practice({ examples, onBack, onComplete }) {
   const [rowFeedback, setRowFeedback] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [showPracticeOverview, setShowPracticeOverview] = useState(false);
+  const [hybridAutoAdvance, setHybridAutoAdvance] = useState(true);
   const example = examples[exampleIndex];
   const isLastExample = exampleIndex === examples.length - 1;
   const key = (r, c) => `${exampleIndex}|${r}|${c}`;
@@ -990,6 +1383,17 @@ function Practice({ examples, onBack, onComplete }) {
   const previousCell = () => {
     if (col > 0) { setCol((c) => c - 1); return; }
     if (activeRow > 0) { setActiveRow((r) => r - 1); setCol(example.cols.length - 1); }
+  };
+
+  const fillPracticeRow = () => {
+    setScores((current) => {
+      const next = { ...current };
+      example.cols.forEach((_, c) => {
+        const k = key(activeRow, c);
+        if (next[k] === undefined) next[k] = 0.0;
+      });
+      return next;
+    });
   };
 
   const continueAfterRowFeedback = () => {
@@ -1065,6 +1469,7 @@ function Practice({ examples, onBack, onComplete }) {
       if (band) {
         event.preventDefault();
         setCell(col, band.v);
+        if (hybridAutoAdvance && col + 1 < example.cols.length) setCol((c) => c + 1);
       } else if (event.key === "ArrowRight") {
         event.preventDefault();
         setCol((c) => Math.min(c + 1, example.cols.length - 1));
@@ -1079,6 +1484,32 @@ function Practice({ examples, onBack, onComplete }) {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   });
+
+  if (!rowFeedback && !showFeedback) {
+    return (
+      <Shell wide fluid>
+        <HybridPhaseScorer
+          phaseLabel={`Practice ${exampleIndex + 1} of ${examples.length}`}
+          cueL1={example.cueL1}
+          cueL2={example.cueL2}
+          rows={example.rows}
+          cols={example.cols}
+          activeRow={activeRow}
+          col={col}
+          valueAt={explicit}
+          onSelectCol={setCol}
+          onScore={(value) => setCell(col, value)}
+          onPrevious={() => setCol((c) => Math.max(0, c - 1))}
+          onNext={() => setCol((c) => Math.min(example.cols.length - 1, c + 1))}
+          onFillRemaining={fillPracticeRow}
+          onFinish={advanceRow}
+          finishLabel="Check row →"
+          autoAdvance={hybridAutoAdvance}
+          onAutoAdvanceChange={setHybridAutoAdvance}
+        />
+      </Shell>
+    );
+  }
 
   return (
     <Shell wide>
@@ -1119,9 +1550,9 @@ function Practice({ examples, onBack, onComplete }) {
           <main style={st.pairPage}>
             <div style={st.pairCueLabel}>Cue words</div>
             <div style={st.pairCuePair}>
-              <div><b style={{ ...st.pairCueWord, fontFamily: FONT_CJK }}>{example.cueL1.w}</b><span style={st.pairLanguage}>{languageName(example.cueL1.lang, "Language 1")}</span></div>
+              <div><b style={{ ...st.pairCueWord, fontFamily: FONT_CJK }}>{example.cueL1.w}</b><span style={st.pairLanguage}>{cueLanguageName(example.cueL1.lang, "Language 1")}</span></div>
               <span style={st.pairArrow}>↔</span>
-              <div><b style={st.pairCueWord}>{example.cueL2.w}</b><span style={st.pairLanguage}>{languageName(example.cueL2.lang, "English")}</span></div>
+              <div><b style={st.pairCueWord}>{example.cueL2.w}</b><span style={st.pairLanguage}>{cueLanguageName(example.cueL2.lang, "English")}</span></div>
             </div>
             <button type="button" style={st.pairOverviewLink} onClick={() => setShowPracticeOverview(true)}>Open matrix overview</button>
             <p style={{ ...st.taskPrompt, textAlign: "center" }}><b>{example.label}:</b> {example.context}</p>
@@ -1159,15 +1590,26 @@ function Practice({ examples, onBack, onComplete }) {
 
         {rowFeedback && (
           <div role="status" style={st.rowFeedbackPanel}>
-            <div style={{ ...st.practiceFeedback, marginTop: 0, ...(currentRowErrors.length === 0 ? st.practiceFeedbackCorrect : st.practiceFeedbackError) }}>
-              <strong>
+            <PracticeFeedbackMatrix
+              example={example}
+              activeRow={activeRow}
+              valueAt={explicit}
+              currentRowResults={currentRowResults}
+            />
+            <div style={st.practiceFeedbackActionRow}>
+              <div style={{ ...st.practiceFeedback, flex: 1, marginTop: 0, ...(currentRowErrors.length === 0 ? st.practiceFeedbackCorrect : st.practiceFeedbackError) }}>
+                <strong>
+                  {currentRowErrors.length === 0
+                    ? `Correct — all ${example.cols.length} cells in this row are right.`
+                    : `${example.cols.length - currentRowErrors.length} of ${example.cols.length} cells in this row are correct.`}
+                </strong>{" "}
                 {currentRowErrors.length === 0
-                  ? `Correct — all ${example.cols.length} cells in this row are right.`
-                  : `${example.cols.length - currentRowErrors.length} of ${example.cols.length} cells in this row are correct.`}
-              </strong>{" "}
-              {currentRowErrors.length === 0
-                ? "Good work. Green outlines mark the correct judgments."
-                : "Green outlines are correct; red outlines need review."}
+                  ? "Good work. Green outlines mark the correct judgments."
+                  : "Green outlines are correct; red outlines need review."}
+              </div>
+              <button style={{ ...st.primary, flexShrink: 0 }} onClick={continueAfterRowFeedback}>
+                {activeRow + 1 < example.rows.length ? "Continue to next row →" : "See practice summary →"}
+              </button>
             </div>
             {currentRowResults.map((result) => (
               <div
@@ -1177,29 +1619,27 @@ function Practice({ examples, onBack, onComplete }) {
                   ...(result.correct ? st.practiceCorrectionCorrect : st.practiceCorrectionError),
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                  <strong>{result.pair}</strong>
+                <div style={st.practiceCorrectionSummary}>
+                  <span>
+                    <strong>{result.pair}</strong>
+                    <span> Your score: {result.given.toFixed(1)} · Expected: <strong>{result.expected.toFixed(1)}</strong></span>
+                  </span>
                   <strong>{result.correct ? "✓ Correct" : "✕ Needs review"}</strong>
                 </div>
-                <div style={{ margin: "4px 0" }}>
-                  Your score: {result.given.toFixed(1)} · Expected: <b>{result.expected.toFixed(1)}</b>
-                </div>
-                <div>{result.explanation}</div>
+                <div style={st.practiceCorrectionExplanation}><strong>Explanation:</strong> {result.explanation}</div>
               </div>
             ))}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
-              <button style={st.primary} onClick={continueAfterRowFeedback}>
-                {activeRow + 1 < example.rows.length ? "Continue to next row →" : "See practice summary →"}
-              </button>
-            </div>
           </div>
         )}
 
         {showFeedback && (
           <div role="status">
-            <button type="button" style={{ ...st.secondary, marginBottom: 14 }} onClick={() => setShowPracticeOverview(true)}>
-              Open completed matrix overview
-            </button>
+            <PracticeFeedbackMatrix
+              example={example}
+              activeRow={example.rows.length - 1}
+              valueAt={explicit}
+              showAllRows
+            />
             <div style={{ ...st.practiceFeedback, ...(results.length === 0 ? st.practiceFeedbackCorrect : st.practiceFeedbackError) }}>
               <strong>
                 {results.length === 0
@@ -1211,12 +1651,15 @@ function Practice({ examples, onBack, onComplete }) {
                 : "Review the corrections below and connect them to the scoring definitions before continuing."}
             </div>
             {results.map((result) => (
-              <div key={result.pair} style={st.practiceCorrection}>
-                <strong>{result.pair}</strong>
-                <div style={{ margin: "4px 0" }}>
-                  Your score: {result.given.toFixed(1)} · Expected: <b>{result.expected.toFixed(1)}</b>
+              <div key={result.pair} style={{ ...st.practiceCorrection, ...st.practiceCorrectionError }}>
+                <div style={st.practiceCorrectionSummary}>
+                  <span>
+                    <strong>{result.pair}</strong>
+                    <span> Your score: {result.given.toFixed(1)} · Expected: <strong>{result.expected.toFixed(1)}</strong></span>
+                  </span>
+                  <strong>✕ Needs review</strong>
                 </div>
-                <div>{result.explanation}</div>
+                <div style={st.practiceCorrectionExplanation}><strong>Explanation:</strong> {result.explanation}</div>
               </div>
             ))}
             {isLastExample && (
@@ -1238,9 +1681,9 @@ function Practice({ examples, onBack, onComplete }) {
             <div style={st.matrixView}>
               <header style={st.matrixViewToolbar}>
                 <div style={st.taskCuePair}>
-                  <div><b style={{ ...st.taskCueWord, fontFamily: FONT_CJK }}>{example.cueL1.w}</b><span style={st.taskCueLanguage}>{languageName(example.cueL1.lang, "Language 1")}</span></div>
+                  <div><b style={{ ...st.taskCueWord, fontFamily: FONT_CJK }}>{example.cueL1.w}</b><span style={st.taskCueLanguage}>{cueLanguageName(example.cueL1.lang, "Language 1")}</span></div>
                   <span style={st.taskCueArrow}>↔</span>
-                  <div><b style={st.taskCueWord}>{example.cueL2.w}</b><span style={st.taskCueLanguage}>{languageName(example.cueL2.lang, "English")}</span></div>
+                  <div><b style={st.taskCueWord}>{example.cueL2.w}</b><span style={st.taskCueLanguage}>{cueLanguageName(example.cueL2.lang, "English")}</span></div>
                 </div>
                 <div style={st.taskProgress}>
                   <span style={st.taskProgressText}>Practice {exampleIndex + 1}/{examples.length} · {showFeedback ? "Complete" : `Row ${activeRow + 1}/${example.rows.length}`}</span>
@@ -1317,6 +1760,7 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
   const [editingCorrections, setEditingCorrections] = useState(false);
   const [wrongCells, setWrongCells] = useState([]);
   const [attempt, setAttempt] = useState(1);
+  const [hybridAutoAdvance, setHybridAutoAdvance] = useState(true);
   const key = (r, c) => `${r}|${c}`;
   const explicit = (r, c) => scores[key(r, c)];
   const labelWidth = labelColWidth(testExample.rows);
@@ -1357,6 +1801,17 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
     if (activeRow > 0) { setActiveRow((r) => r - 1); setCol(testExample.cols.length - 1); }
   };
 
+  const fillTestRow = () => {
+    setScores((current) => {
+      const next = { ...current };
+      testExample.cols.forEach((_, c) => {
+        const k = key(activeRow, c);
+        if (next[k] === undefined) next[k] = 0.0;
+      });
+      return next;
+    });
+  };
+
   const submitCorrections = () => {
     const wrong = [];
     testExample.answers.forEach((row, r) => row.forEach((expected, c) => {
@@ -1376,6 +1831,7 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
       if (band) {
         event.preventDefault();
         setCell(col, band.v);
+        if (!editingCorrections && hybridAutoAdvance && col + 1 < testExample.cols.length) setCol((c) => c + 1);
       } else if (event.key === "ArrowRight") {
         event.preventDefault();
         setCol((current) => Math.min(current + 1, testExample.cols.length - 1));
@@ -1391,6 +1847,32 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   });
+
+  if (!result) {
+    return (
+      <Shell wide fluid>
+        <HybridPhaseScorer
+          phaseLabel={`Qualification test · Attempt ${attempt}`}
+          cueL1={testExample.cueL1}
+          cueL2={testExample.cueL2}
+          rows={testExample.rows}
+          cols={testExample.cols}
+          activeRow={activeRow}
+          col={col}
+          valueAt={explicit}
+          onSelectCol={setCol}
+          onScore={(value) => setCell(col, value)}
+          onPrevious={() => setCol((c) => Math.max(0, c - 1))}
+          onNext={() => setCol((c) => Math.min(testExample.cols.length - 1, c + 1))}
+          onFillRemaining={fillTestRow}
+          onFinish={advance}
+          finishLabel={activeRow + 1 < testExample.rows.length ? "Finish row →" : "Submit test →"}
+          autoAdvance={hybridAutoAdvance}
+          onAutoAdvanceChange={setHybridAutoAdvance}
+        />
+      </Shell>
+    );
+  }
 
   return (
     <Shell wide>
@@ -1447,9 +1929,9 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
           <main style={st.pairPage}>
             <div style={st.pairCueLabel}>Cue words</div>
             <div style={st.pairCuePair}>
-              <div><b style={{ ...st.pairCueWord, fontFamily: FONT_CJK }}>{testExample.cueL1.w}</b><span style={st.pairLanguage}>{languageName(testExample.cueL1.lang, "Language 1")}</span></div>
+              <div><b style={{ ...st.pairCueWord, fontFamily: FONT_CJK }}>{testExample.cueL1.w}</b><span style={st.pairLanguage}>{cueLanguageName(testExample.cueL1.lang, "Language 1")}</span></div>
               <span style={st.pairArrow}>↔</span>
-              <div><b style={st.pairCueWord}>{testExample.cueL2.w}</b><span style={st.pairLanguage}>{languageName(testExample.cueL2.lang, "English")}</span></div>
+              <div><b style={st.pairCueWord}>{testExample.cueL2.w}</b><span style={st.pairLanguage}>{cueLanguageName(testExample.cueL2.lang, "English")}</span></div>
             </div>
             <section style={st.pairQuestionCard}>
               <h1 style={st.pairQuestionTitle}>{activeRow === 0 && col === 0 ? "How equivalent are these cue words?" : "How equivalent are these associations?"}</h1>
@@ -1555,14 +2037,27 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
         )}
 
         {result === "failed" && editingCorrections && (
-          <div style={{ ...st.taskScoreButtons, marginTop: 18 }}>
-            {BANDS.map((band) => (
-              <button key={band.v} onClick={() => setCell(col, band.v)} style={{ ...st.taskScoreButton, borderColor: band.c }}>
-                <span style={{ ...st.taskScoreKey, color: band.ink }}>{band.key}</span>
-                <span style={st.taskScoreLabel}>{band.label}</span>
-                <span style={st.taskScoreValue}>{band.v.toFixed(1)}</span>
-              </button>
-            ))}
+          <div style={{ ...st.correctionScoreGrid, marginTop: 18 }}>
+            {BANDS.map((band) => {
+              const accent = band.v === 1 ? "#176b58" : band.v === 0.8 ? "#3f754c" : band.v === 0.5 ? "#ad6d00" : "#4b515a";
+              const selected = explicit(activeRow, col) === band.v;
+              return (
+                <button
+                  key={band.v}
+                  onClick={() => setCell(col, band.v)}
+                  style={{
+                    ...st.correctionScoreOption,
+                    borderColor: band.c,
+                    ...(selected ? { background: `${band.c}18`, boxShadow: `inset 0 0 0 2px ${accent}` } : {}),
+                  }}
+                >
+                  <span style={st.correctionScorePress}>Press <b style={{ ...st.pairPressKey, color: accent }}>{band.key}</b></span>
+                  <strong style={{ ...st.correctionScoreValue, color: accent }}>{band.v.toFixed(1)}</strong>
+                  <strong style={{ ...st.correctionScoreName, color: accent }}>{band.label}</strong>
+                  <span style={st.correctionScoreDescription}>{band.blurb}</span>
+                </button>
+              );
+            })}
           </div>
         )}
         {result && (
@@ -1590,19 +2085,13 @@ function Intro({ initialPage = 1, pid, selectedLanguage, onLanguageChange, onSta
   const [page, setPage] = useState(initialPage);
   const [consented, setConsented] = useState(false);
   const [showConsent, setShowConsent] = useState(false);
-  const selectedExamples = PRACTICE_EXAMPLES_BY_LANGUAGE[selectedLanguage] || PRACTICE_EXAMPLES_BY_LANGUAGE.zh;
-  const workedSource = selectedExamples[0];
+  const workedSource = INSTRUCTION_EXAMPLES_BY_LANGUAGE[selectedLanguage] || INSTRUCTION_EXAMPLES_BY_LANGUAGE.zh;
   const workedMatrix = {
     cueL1: workedSource.cueL1,
     cueL2: workedSource.cueL2,
     cols: workedSource.cols,
     rows: workedSource.rows.map((row, r) => ({ ...row, vals: workedSource.answers[r] })),
   };
-  const emptyWorkedMatrix = {
-    ...workedMatrix,
-    rows: workedMatrix.rows.map((row) => ({ ...row, vals: row.vals.map(() => null) })),
-  };
-
   const goToPage = (nextPage) => {
     setPage(nextPage);
     requestAnimationFrame(() => {
@@ -1785,31 +2274,41 @@ function Intro({ initialPage = 1, pid, selectedLanguage, onLanguageChange, onSta
         <h2 style={st.sectionTitle}>Example of the annotation UI</h2>
         <p style={st.lead}>
           On screen, you'll be given a cue pair — here, <b style={{ fontFamily: FONT_CJK }}>{workedSource.cueL1.w}</b> ↔ <b>{workedSource.cueL2.w}</b>,
-          as shown in the top-left corner of the matrix. The row2 and column 2 (in red color) are the cue words themselves.
-          From the third row and third column onward are the <b>associations</b> for each cue word: columns are associations in English, rows are associations in the other language. The matrix starts empty, like this:
+          shown above the annotation interface. The first row and first column contain the cue words themselves; the remaining
+          columns contain English associations and the remaining rows contain associations in the other language. One row is
+          presented at a time, while previously completed rows remain visible for context.
         </p>
 
-        <ExampleMatrixTable matrix={emptyWorkedMatrix} highlightCorner />
+        <HybridInstructionExample example={workedSource} />
 
         <h2 style={st.sectionTitle}>Your task</h2>
         <ol style={{ ...st.lead, paddingLeft: 20, margin: "0 0 22px" }}>
           <li style={{ marginBottom: 10 }}>
-            Compare the conceptual equivalence of the <b>cue–cue pair</b> to fill the top-left cell by assigning a score of
-            <b> 1 / 0.8 / 0.5 / 0</b> based on the definitions on the previous page.
+            Begin with the <b>cue–cue pair</b>, which anchors the meaning of the matrix. Assign
+            <b> 1.0, 0.8, 0.5, or 0.0</b> using the definitions above.
+          </li>
+          <li style={{ marginBottom: 10 }}>
+            Work across the current row. Select a cell in the <b>Matrix overview</b>; the focused pair appears in
+            <b> Score current pair</b>. Use the horizontal scroll bar when the row contains more associations than fit on screen.
+          </li>
+          <li style={{ marginBottom: 10 }}>
+            Choose a scoring row or press <kbd>1</kbd>–<kbd>4</kbd>. When auto-advance is on, scoring moves directly to the
+            next cell. Use <kbd>←</kbd><kbd>→</kbd> to browse, or skip a pair to leave it unreviewed.
           </li>
           <li>
-            Then compare each cross-lingual pair of associations for every remaining cell, and fill in a score the
-            same way. Only click cells with a real relationship; anything left blank is saved as 0. You will be shown the matrix row and by row, click the "Next row" (or use keybord `enter') button to advance. You can also use the keyboard: <kbd>1</kbd>–<kbd>4</kbd> to mark, <kbd>←</kbd><kbd>→</kbd> to move, and <kbd>Enter</kbd> to advance.
+            A blank cell means <b>unreviewed</b>, whereas <b>0.0</b> means you reviewed the pair and found no alignment.
+            After scanning the whole row, confirm any remaining blanks as 0.0 and finish the row. The next row will then appear,
+            while your completed rows remain visible.
           </li>
         </ol>
 
-        <h2 style={st.sectionTitle}>Example annotation output</h2>
-        <p style={{ ...st.lead, fontSize: 14 }}>Once scored, the same matrix looks like this:</p>
+        <h2 style={st.sectionTitle}>Example completed matrix</h2>
+        <p style={{ ...st.lead, fontSize: 14 }}>After all rows have been reviewed, the completed matrix can be viewed as a whole:</p>
 
         <ExampleMatrixTable matrix={workedMatrix} highlightCorner />
 
         <p style={{ ...st.lead, fontSize: 14 }}>
-          The top-left cell (<b>{workedSource.cueL1.w} × {workedSource.cueL2.w}</b>, scored {workedSource.answers[0][0].toFixed(1)}) is the cue-cue anchor — it represents the direct
+          The first cell (<b>{workedSource.cueL1.w} × {workedSource.cueL2.w}</b>, scored {workedSource.answers[0][0].toFixed(1)}) is the cue-cue anchor — it represents the direct
           cross-lingual concept link that gives context to every other cell in the grid.
         </p>
         <div style={{ display: "flex", gap: 12, marginTop: 20 }}>
@@ -1821,7 +2320,7 @@ function Intro({ initialPage = 1, pid, selectedLanguage, onLanguageChange, onSta
   );
 }
 
-function Shell({ children, wide }) {
+function Shell({ children, wide, fluid = false }) {
   return (
     <div style={st.page}>
       <style>{`
@@ -1829,9 +2328,14 @@ function Shell({ children, wide }) {
         html, body { margin: 0; overflow-anchor: none; }
         button { cursor: pointer; font-family: inherit; }
         button:focus-visible { outline: 3px solid #26292e; outline-offset: 2px; }
+        .hybrid-matrix-scroll { overflow-x: scroll !important; scrollbar-gutter: stable; scrollbar-width: auto; scrollbar-color: #6f8f8d #eceae4; }
+        .hybrid-matrix-scroll::-webkit-scrollbar { height: 14px; }
+        .hybrid-matrix-scroll::-webkit-scrollbar-track { background: #eceae4; border-radius: 999px; }
+        .hybrid-matrix-scroll::-webkit-scrollbar-thumb { background: #6f8f8d; border: 3px solid #eceae4; border-radius: 999px; }
+        .hybrid-matrix-scroll::-webkit-scrollbar-thumb:hover { background: #176b68; }
         @media (prefers-reduced-motion: reduce){ * { transition: none !important; scroll-behavior: auto !important; } }
       `}</style>
-      <div style={{ ...st.frame, maxWidth: wide ? 1080 : 880 }}>{children}</div>
+      <div style={{ ...st.frame, maxWidth: fluid ? "none" : wide ? 1080 : 880 }}>{children}</div>
     </div>
   );
 }
@@ -1926,6 +2430,71 @@ const st = {
   matrixViewActions: { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 22, fontSize: 13 },
   matrixViewGrid: { minHeight: 0, maxHeight: "none", marginBottom: 0, borderRadius: 7, overflow: "auto" },
   matrixViewFooter: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, background: "#fff", borderTop: "1px solid #e3e0d8", padding: "12px 10px" },
+  hybridPage: { width: "100%" },
+  hybridTopBar: { position: "sticky", top: 0, zIndex: 30, display: "grid", gridTemplateColumns: "1fr minmax(260px,360px) 1fr", alignItems: "center", gap: 20, background: "rgba(255,255,255,.98)", borderBottom: "1px solid #e3e0d8", padding: "12px 8px" },
+  hybridTopActions: { display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 10 },
+  hybridCuePair: { display: "grid", gridTemplateColumns: "max-content 58px max-content", justifyContent: "center", alignItems: "start", padding: "17px 0 13px" },
+  hybridColumns: { display: "grid", gridTemplateColumns: "minmax(0,1fr) 500px", gap: 14, alignItems: "stretch" },
+  hybridPanel: { minWidth: 0, background: "#fff", border: "1px solid #d8d4ca", borderRadius: 9, padding: "16px 18px" },
+  hybridPanelTitle: { margin: 0, fontSize: 20, lineHeight: 1.2 },
+  hybridPanelLead: { margin: "8px 0 18px", color: "#4b515a", fontSize: 13 },
+  hybridScrollCue: { margin: "-4px 0 6px", color: "#176b68", fontSize: 11.5, fontWeight: 700, textAlign: "right" },
+  hybridScrollRange: { display: "block", width: "100%", height: 22, margin: "0 0 7px", accentColor: "#176b68", cursor: "ew-resize" },
+  hybridMatrixScroll: { width: "100%", overflowX: "scroll", paddingBottom: 6, borderBottom: "1px solid #d8d4ca" },
+  hybridTable: { width: "max-content", minWidth: "100%", borderCollapse: "separate", borderSpacing: "7px 7px", tableLayout: "auto" },
+  hybridColHead: { minWidth: 88, padding: "0 8px 5px", color: "#4b515a", fontSize: 16, fontWeight: 800, whiteSpace: "nowrap" },
+  hybridCueHeader: { background: "#fbe4e0", color: "#a3341c", border: "1px solid #efc6bf", borderRadius: 5, padding: "6px 8px" },
+  hybridRowLabelCell: { position: "sticky", left: 0, zIndex: 2, width: 74, minWidth: 74, background: "#fff", padding: "6px 8px", textAlign: "left", fontSize: 16, fontWeight: 800 },
+  hybridActiveRow: { background: "#eaf4f4" },
+  hybridCellWrap: { padding: 0, textAlign: "center" },
+  hybridCell: { width: "100%", minWidth: 88, height: 42, padding: "0 9px", background: "#fff", color: "#4b515a", border: "1px solid #dedbd3", borderRadius: 5, fontSize: 13, whiteSpace: "nowrap" },
+  hybridSelectedCell: { borderColor: "#176b68", boxShadow: "0 0 0 3px #176b68", background: "#fffdf7" },
+  hybridFillButton: { width: "100%", background: "#fff", color: "#176b68", border: "1px solid #176b68", borderRadius: 6, padding: "11px 15px", fontSize: 15, fontWeight: 700 },
+  hybridHelp: { margin: "8px 0 18px", color: "#5b636e", fontSize: 12.5, textAlign: "center" },
+  hybridLegend: { display: "flex", alignItems: "center", justifyContent: "center", gap: 18, flexWrap: "wrap", color: "#4b515a", fontSize: 11.5 },
+  hybridLegendScored: { display: "inline-block", marginRight: 5, padding: "5px 7px", background: "#f1f7ed", border: "1px solid #d4e2ca", borderRadius: 4, color: "#3f754c" },
+  hybridLegendZero: { display: "inline-block", marginRight: 5, padding: "5px 9px", background: "#fafafa", border: "1px solid #e3e0d8", borderRadius: 4 },
+  hybridScoreHead: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 },
+  hybridColumnCount: { border: "1px solid #d8d4ca", borderRadius: 6, padding: "7px 10px", fontSize: 12 },
+  hybridPairNav: { display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 10, marginBottom: 12, textAlign: "center", fontSize: 12 },
+  hybridCurrentPair: { display: "grid", gridTemplateColumns: "1fr 42px 1fr", alignItems: "center", background: "#fff", border: "1px solid #d8d4ca", borderRadius: 7, padding: "17px 20px", marginBottom: 10, textAlign: "center", fontSize: 25 },
+  hybridScoreConfirmation: { minHeight: 29, margin: "-2px 0 7px", padding: "5px 10px", color: "#8a8578", background: "transparent", borderRadius: 5, fontSize: 12, fontWeight: 700, textAlign: "center", transition: "background .12s, color .12s" },
+  hybridScoreConfirmationVisible: { color: "#176b68", background: "#e9f4f1" },
+  hybridScores: { display: "grid", gap: 7 },
+  hybridScoreOption: { display: "grid", gridTemplateColumns: "90px 38px 115px minmax(155px,1fr)", alignItems: "center", gap: 9, minHeight: 50, background: "#fff", border: "1.5px solid", borderRadius: 6, padding: "7px 9px", textAlign: "left", fontSize: 11.5, transition: "background .12s, box-shadow .12s, transform .12s" },
+  correctionScoreGrid: { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12 },
+  correctionScoreOption: { display: "grid", gridTemplateColumns: "auto 1fr", gridTemplateRows: "auto auto 1fr", columnGap: 12, rowGap: 5, minWidth: 0, minHeight: 132, padding: "14px 16px", background: "#fff", border: "1.5px solid", borderRadius: 8, textAlign: "left" },
+  correctionScorePress: { gridColumn: "1 / -1", fontSize: 14 },
+  correctionScoreValue: { fontSize: 20, lineHeight: 1.2 },
+  correctionScoreName: { fontSize: 16, lineHeight: 1.2 },
+  correctionScoreDescription: { gridColumn: "1 / -1", alignSelf: "start", color: "#4b515a", fontSize: 13, lineHeight: 1.35 },
+  instructionUiExample: { margin: "18px 0 28px", overflow: "hidden", background: "#f8f7f3", border: "1px solid #d8d4ca", borderRadius: 12 },
+  instructionUiHeader: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", alignItems: "center", gap: 12, padding: "11px 14px", background: "#fff", borderBottom: "1px solid #dedbd3", fontSize: 11 },
+  instructionUiProgress: { display: "grid", gap: 5, textAlign: "center" },
+  instructionUiProgressTrack: { display: "block", height: 5, overflow: "hidden", background: "#eceae4", borderRadius: 999 },
+  instructionUiProgressFill: { display: "block", width: "28%", height: "100%", background: "#176b68", borderRadius: 999 },
+  instructionUiCuePair: { display: "grid", gridTemplateColumns: "max-content 34px max-content", justifyContent: "center", alignItems: "center", gap: 5, padding: "14px 0 12px", fontSize: 22 },
+  instructionUiLanguage: { display: "block", marginTop: 3, color: "#6b727c", fontSize: 9, fontWeight: 500, textAlign: "center" },
+  instructionUiColumns: { display: "grid", gridTemplateColumns: "minmax(0,1fr) 290px", gap: 10, padding: "0 10px 10px" },
+  instructionUiPanel: { minWidth: 0, padding: 13, background: "#fff", border: "1px solid #d8d4ca", borderRadius: 8 },
+  instructionUiTitle: { margin: 0, fontSize: 16 },
+  instructionUiLead: { margin: "5px 0 10px", color: "#4b515a", fontSize: 11 },
+  instructionUiScrollLabel: { color: "#176b68", fontSize: 10, fontWeight: 700, textAlign: "right" },
+  instructionUiScrollBar: { height: 11, margin: "5px 0 8px", padding: 3, background: "#eceae4", borderRadius: 999 },
+  instructionUiTable: { width: "100%", minWidth: 360, borderCollapse: "collapse", tableLayout: "fixed", fontSize: 11 },
+  instructionUiRowCue: { width: 82, padding: "9px 7px", background: "#fbe4e0", color: "#a3341c", border: "1px solid #efc6bf", borderRadius: 5, textAlign: "left", fontFamily: FONT_CJK, fontSize: 15 },
+  instructionUiBlankCell: { display: "block", height: 34, background: "#fff", border: "1px solid #dedbd3", borderRadius: 4 },
+  instructionUiSelectedCell: { display: "block", height: 34, background: "#fffdf5", border: "3px solid #176b68", borderRadius: 4 },
+  instructionUiConfirm: { width: "100%", marginTop: 10, padding: "8px", background: "#fff", color: "#176b68", border: "1px solid #176b68", borderRadius: 5, fontSize: 10, fontWeight: 700 },
+  instructionUiLegend: { display: "flex", justifyContent: "center", flexWrap: "wrap", gap: 10, marginTop: 9, color: "#4b515a", fontSize: 9 },
+  instructionUiPairCard: { display: "grid", gridTemplateColumns: "1fr 25px 1fr", alignItems: "center", gap: 5, margin: "10px 0", padding: "13px 7px", border: "1px solid #dedbd3", borderRadius: 6, textAlign: "center", fontSize: 17 },
+  instructionUiScores: { display: "grid", gap: 5 },
+  instructionUiScore: { display: "grid", gridTemplateColumns: "55px 30px 1fr", alignItems: "center", gap: 5, padding: "7px", border: "1px solid", borderRadius: 5, fontSize: 9 },
+  instructionUiAutoAdvance: { marginTop: 8, padding: "7px", color: "#176b68", border: "1px solid #176b68", borderRadius: 5, fontSize: 9, fontWeight: 700 },
+  hybridAutoAdvance: { display: "flex", alignItems: "center", gap: 9, marginTop: 10, padding: "10px 12px", border: "1px solid #176b68", borderRadius: 6, color: "#176b68", fontSize: 12.5, fontWeight: 700 },
+  hybridSkip: { display: "flex", alignItems: "center", gap: 12, width: "100%", marginTop: 8, background: "#fff", border: "1px solid #d8d4ca", borderRadius: 6, padding: "9px 12px", textAlign: "left" },
+  hybridKeys: { marginTop: 8, padding: "8px 10px", background: "#f8f7f3", border: "1px solid #e3e0d8", borderRadius: 6, color: "#4b515a", fontSize: 11.5, textAlign: "center" },
+  hybridFooter: { position: "sticky", bottom: 0, zIndex: 25, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 16, background: "rgba(255,255,255,.98)", borderTop: "1px solid #e3e0d8", padding: "12px 8px", marginTop: 12 },
 
   progWrap: { display: "flex", alignItems: "center", gap: 12, marginBottom: 14 },
   progBar: { flex: 1, height: 6, background: "#e3e0d8", borderRadius: 99, overflow: "hidden" },
@@ -1938,9 +2507,9 @@ const st = {
   table: { borderCollapse: "separate", borderSpacing: 0, width: "auto", minWidth: "100%" },
   corner: { position: "sticky", left: 0, zIndex: 3, background: "#dce7e9", color: "#40545b", padding: "8px 12px", borderTopLeftRadius: 14, borderRight: "2px solid #c9dadd", borderBottom: "2px solid #c9dadd", fontSize: 15, textAlign: "center", verticalAlign: "middle", width: 140, minWidth: 140 },
   colHead: { width: 62, padding: "10px 8px", fontSize: 13, fontWeight: 700, color: "#4b515a", background: "#faf8f3", borderBottom: "2px solid #e3e0d8", whiteSpace: "nowrap", minWidth: 62 },
-  colHeadCue: { background: "#fbe4e0", color: "#a3341c" },
+  colHeadCue: { background: "#fbe4e0", color: "#a3341c", border: "1px solid #efc6bf" },
   rowHead: { position: "sticky", left: 0, zIndex: 2, background: "#eef4ee", padding: "8px 12px", textAlign: "left", verticalAlign: "middle", borderRight: "2px solid #e3e0d8", width: 140, minWidth: 140 },
-  rowHeadCue: { background: "#fbe4e0" },
+  rowHeadCue: { background: "#fbe4e0", color: "#a3341c", border: "1px solid #efc6bf" },
   rowHeadGloss: { display: "block", fontSize: 11, color: "#8a8578", fontWeight: 400 },
   headActive: { background: "#e7e2d6", color: "#26292e" },
   cell: { width: 62, height: 46, textAlign: "center", fontSize: 15, fontWeight: 800, borderBottom: "1px solid #eee7da", borderRight: "1px solid #eee7da", transition: "background .1s", userSelect: "none", background: "#fcfbe9" },
@@ -1991,9 +2560,16 @@ const st = {
   practiceFeedbackCorrect: { background: "#eef7f0", border: "1px solid #b9d9c1", color: "#245b35" },
   practiceFeedbackError: { background: "#fbf0eb", border: "1px solid #e6c0ae", color: "#873b20" },
   rowFeedbackPanel: { background: "#fff", border: "1px solid #d8d4ca", borderRadius: 12, padding: 16, marginTop: 16 },
+  practiceFeedbackMatrix: { marginBottom: 16, padding: "14px 14px 10px", background: "#f8f7f3", border: "1px solid #dedbd3", borderRadius: 10 },
+  practiceFeedbackMatrixHead: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 18, marginBottom: 10 },
+  practiceFeedbackCellCorrect: { border: "3px solid #4f9d69", boxShadow: "inset 0 0 0 1px #fff" },
+  practiceFeedbackCellError: { border: "3px solid #c85b3d", background: "#fff2ed", color: "#8a3a1c", boxShadow: "inset 0 0 0 1px #fff" },
+  practiceFeedbackActionRow: { display: "flex", alignItems: "stretch", gap: 12, marginBottom: 10 },
   practiceCorrection: { background: "#fff", border: "1px solid #e3e0d8", borderRadius: 10, padding: "12px 14px", marginTop: 10, color: "#4b515a", fontSize: 14, lineHeight: 1.5 },
   practiceCorrectionCorrect: { background: "#f5faf6", borderColor: "#b9d9c1" },
   practiceCorrectionError: { background: "#fff7f3", borderColor: "#e6c0ae" },
+  practiceCorrectionSummary: { display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 },
+  practiceCorrectionExplanation: { marginTop: 5 },
   codeBox: { background: "#eef4ee", border: "1px solid #cfe0cf", borderRadius: 10, padding: "14px 18px", fontSize: 16, margin: "16px 0" },
 
   fieldGroup: { marginBottom: 22 },

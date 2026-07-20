@@ -51,9 +51,36 @@ const NAV_STAGES = [
 ];
 
 function DevNav({ current, onJump }) {
+  const [open, setOpen] = useState(true);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        aria-label="Open developer navigation"
+        aria-expanded="false"
+        onClick={() => setOpen(true)}
+        style={st.devNavToggle}
+      >
+        ☰ Dev nav
+      </button>
+    );
+  }
+
   return (
     <div style={st.devNav}>
-      <div style={st.devNavLabel}>Dev nav</div>
+      <div style={st.devNavHeader}>
+        <div style={st.devNavLabel}>Dev nav</div>
+        <button
+          type="button"
+          aria-label="Collapse developer navigation"
+          aria-expanded="true"
+          onClick={() => setOpen(false)}
+          style={st.devNavCollapse}
+        >
+          ×
+        </button>
+      </div>
       {NAV_STAGES.map((entry) => {
         const active = entry.stage === current.stage && (entry.stage !== "intro" || entry.page === current.page);
         return (
@@ -438,7 +465,7 @@ export default function App() {
       {loadErr && <div style={st.warn}>⚠ Could not load your assignment from the server ({loadErr}) — showing demo data instead. Your work will not be saved correctly.</div>}
 
       {mainLayout === "hybrid" && (
-        <div style={{ ...st.hybridPage, ...(devNavEnabled ? { paddingRight: 150 } : {}) }}>
+        <div style={st.hybridPage}>
           <header style={st.hybridTopBar}>
             <span>Matrix {pair + 1} of {CUE_PAIRS.length}</span>
             <div style={st.pairCellProgress}>
@@ -2590,7 +2617,10 @@ const st = {
   languagePairChoiceSelected: { borderColor: "#26292e", background: "#f7f5f0", color: "#26292e" },
 
   devNav: { position: "fixed", top: 12, right: 12, zIndex: 999, display: "flex", flexDirection: "column", gap: 4, background: "#1c1e22", border: "1px solid #3a3d43", borderRadius: 10, padding: "8px", boxShadow: "0 6px 20px rgba(0,0,0,.25)", maxWidth: 168 },
+  devNavHeader: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 },
   devNavLabel: { fontSize: 10, letterSpacing: ".1em", textTransform: "uppercase", color: "#8a8578", fontWeight: 700, padding: "2px 6px 4px" },
+  devNavCollapse: { display: "grid", placeItems: "center", width: 24, height: 24, padding: 0, background: "transparent", color: "#d6d3c9", border: "1px solid #3a3d43", borderRadius: 6, fontSize: 18, lineHeight: 1 },
+  devNavToggle: { position: "fixed", top: 12, right: 12, zIndex: 999, padding: "8px 11px", background: "#1c1e22", color: "#f3f1ec", border: "1px solid #3a3d43", borderRadius: 8, boxShadow: "0 4px 14px rgba(0,0,0,.2)", fontSize: 12, fontWeight: 700 },
   devNavBtn: { textAlign: "left", background: "transparent", color: "#d6d3c9", border: "none", borderRadius: 6, padding: "6px 8px", fontSize: 12.5, cursor: "pointer" },
   devNavBtnActive: { background: "#f3f1ec", color: "#1c1e22", fontWeight: 700 },
 };

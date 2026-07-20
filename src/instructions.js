@@ -56,9 +56,9 @@ export const INSTRUCTION_SECTIONS = [
 ];
 
 export const SCORING_DISCIPLINE = [
-  "Use 1.0 and 0.8 sparingly. Within a synonym cluster, mark only the one or two closest matches.",
+  // "Use 1.0 and 0.8 sparingly. Within a synonym cluster, mark only the one or two closest matches.",
   // "Be strict with 0.5. If a relationship is not one of the defined moderate-alignment relations, use 0.",
-  "Opposite polarity does not create alignment unless the two words are themselves translations.",
+  // "Opposite polarity does not create alignment unless the two words are themselves translations.",
   // "A generic match does not make every instance of that generic concept a match.",
   "Blank cells are saved as 0, so only mark cells with a real conceptual alignment.",
 ];
@@ -67,14 +67,14 @@ export const PRACTICE_EXAMPLES = [
   {
     id: "doctor",
     label: "Practice 1 · Concrete concept",
-    cueL1: { w: "大夫", lang: "Mandarin Chinese" },
+    cueL1: { w: "医生", lang: "Mandarin Chinese" },
     cueL2: { w: "doctor", lang: "English" },
     context: "The cue pair establishes the concept of a medical doctor. Complete the matrix exactly as you will in the real task.",
     cols: ["doctor", "physician", "coat"],
     rows: [
-      { w: "大夫", gloss: "doctor (cue)" },
-      { w: "医生", gloss: "doctor / physician" },
-      { w: "白大褂", gloss: "white coat" },
+      { w: "医生", gloss: "(cue)" },
+      { w: "护士", gloss: "" },
+      { w: "医院", gloss: "" },
     ],
     answers: [
       [1.0, 0.8, 0.0],
@@ -245,6 +245,51 @@ const GERMAN_PRACTICE_EXAMPLES = [
   },
 ];
 
+// Worked examples shown only on the instruction page.
+// Keep these separate from practice so they can be simplified or revised independently.
+export const INSTRUCTION_EXAMPLES_BY_LANGUAGE = {
+  zh: {
+    id: "instruction_doctor",
+    cueL1: { w: "医生", lang: "Mandarin Chinese" },
+    cueL2: { w: "doctor", lang: "English" },
+    cols: ["doctor", "physician", "hospital"],
+    rows: [
+      { w: "医生", gloss: "(cue)" },
+      { w: "医务人员", gloss: "" },
+      { w: "医院", gloss: "" },
+    ],
+    answers: [
+      [1.0, 0.8, 0.0],
+      [0.5, 0.0, 0.0],
+      [0.0, 0.0, 1.0],
+    ],
+  },
+  nl: {
+    id: "instruction_dak",
+    cueL1: { w: "dak", lang: "Dutch" },
+    cueL2: { w: "ceiling", lang: "English" },
+    cols: ["ceiling", "roof", "tile"],
+    rows: [
+      { w: "dak", gloss: "roof (cue)" },
+      { w: "pannen", gloss: "roof tiles" },
+      { w: "pan", gloss: "tile" },
+    ],
+    answers: [[0.5, 1.0, 0.0], [0.0, 0.5, 0.8], [0.0, 0.0, 1.0]],
+  },
+  de: {
+    id: "instruction_mediziner",
+    cueL1: { w: "Mediziner", lang: "German" },
+    cueL2: { w: "doctor", lang: "English" },
+    cols: ["doctor", "physician", "coat"],
+    rows: [
+      { w: "Mediziner", gloss: "medical practitioner (cue)" },
+      { w: "Arzt", gloss: "doctor" },
+      { w: "Kittel", gloss: "coat / smock" },
+    ],
+    answers: [[0.8, 0.8, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.8]],
+  },
+};
+
 export const PRACTICE_EXAMPLES_BY_LANGUAGE = {
   zh: PRACTICE_EXAMPLES,
   nl: DUTCH_PRACTICE_EXAMPLES,
@@ -255,15 +300,15 @@ export const TEST_EXAMPLES_BY_LANGUAGE = {
   nl: TEST_EXAMPLE,
   zh: {
     id: "wu_cloud_test",
-    cueL1: { w: "雾", lang: "Mandarin Chinese" },
-    cueL2: { w: "cloud", lang: "English" },
-    cols: ["fog", "cloud", "sky"],
+    cueL1: { w: "出租车", lang: "Mandarin Chinese" },
+    cueL2: { w: "taxi", lang: "English" },
+    cols: ["taxi", "cab", "hail"],
     rows: [
-      { w: "雾", gloss: "" },
-      { w: "雾气", gloss: "" },
-      { w: "雾霾", gloss: "" },
+      { w: "出租车", gloss: "" },
+      { w: "滴滴", gloss: "" },
+      { w: "打的", gloss: "" },
     ],
-    answers: [[1.0, 0.0, 0.0], [0.8, 0.0, 0.0], [0.5, 0.0, 0.0]],
+    answers: [[1.0, 1.0, 0.0], [0.8, 0.8, 0.0], [0, 0.0, 1.0]],
   },
   de: {
     id: "nebel_cloud_test",

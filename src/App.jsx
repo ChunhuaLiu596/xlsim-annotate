@@ -142,6 +142,7 @@ export default function App() {
   const [activeRow, setActiveRow] = useState(0);
   const [col, setCol] = useState(0);
   const [hoverCol, setHoverCol] = useState(null);
+  const [showMatrixOverview, setShowMatrixOverview] = useState(false);
   const [prolific] = useState(getProlificParams);
   const [t0] = useState(Date.now());
   const [matrixEnter, setMatrixEnter] = useState(Date.now());
@@ -197,7 +198,6 @@ export default function App() {
     setScores((s) => ({ ...s, [key(activeRow, c)]: v }));
     if (liveRef.current) liveRef.current.textContent =
       `${task.rows[activeRow].w} × ${task.cols[c]} = ${v.toFixed(1)} ${bandOf(v).label}`;
-    setCol((x) => Math.min(x + 1, C - 1));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeRow, C, pair]);
 
@@ -219,6 +219,7 @@ export default function App() {
   };
 
   const advance = async () => {
+    if (col + 1 < C) { setCol(col + 1); return; }
     await commitRow(activeRow);
     if (activeRow + 1 < R) { setActiveRow(activeRow + 1); setCol(0); return; }
     // matrix finished → next pair, or done
@@ -227,6 +228,11 @@ export default function App() {
     } else {
       await finalize();
     }
+  };
+
+  const previousCell = () => {
+    if (col > 0) { setCol(col - 1); return; }
+    if (activeRow > 0) { setActiveRow(activeRow - 1); setCol(C - 1); }
   };
 
   // ---- gold QC over everything scored so far ----
@@ -368,8 +374,12 @@ export default function App() {
     );
   }
 
-  const pctPair = Math.round((activeRow / R) * 100);
+  const cellNumber = activeRow * C + col + 1;
+  const totalCells = R * C;
+  const pctPair = Math.round(((cellNumber - 1) / totalCells) * 100);
   const labelWidth = labelColWidth(task.rows);
+  const currentValue = explicit(activeRow, col);
+  const isCueCueCell = activeRow === 0 && col === 0;
 
   return (
     <>
@@ -381,28 +391,14 @@ export default function App() {
       {!prolific.pid && backendReady && <div style={st.warn}>⚠ No PROLIFIC_PID in the URL — data will be keyed to an empty ID. This is expected only in local testing.</div>}
       {loadErr && <div style={st.warn}>⚠ Could not load your assignment from the server ({loadErr}) — showing demo data instead. Your work will not be saved correctly.</div>}
 
-      <header style={st.taskToolbar}>
-        <div style={st.taskCuePair}>
-          <div>
-            <b style={{ ...st.taskCueWord, fontFamily: FONT_CJK }}>{task.cueL1.w}</b>
-            <span style={st.taskCueLanguage}>{languageName(task.cueL1.lang, "Language 1")}</span>
-          </div>
-          <span style={st.taskCueArrow}>↔</span>
-          <div>
-            <b style={st.taskCueWord}>{task.cueL2.w}</b>
-            <span style={st.taskCueLanguage}>{languageName(task.cueL2.lang, "English")}</span>
-          </div>
+      <header style={st.pairTopBar}>
+        <span style={st.pairMatrixCount}>Matrix {pair + 1} of {CUE_PAIRS.length}</span>
+        <div style={st.pairCellProgress}>
+          <span>Cell {cellNumber} of {totalCells}</span>
+          <div style={st.taskProgressTrack}><div style={{ ...st.taskProgressFill, width: `${pctPair}%` }} /></div>
         </div>
-
-        <div style={st.taskProgress}>
-          <span style={st.taskProgressText}>Matrix {pair + 1}/{CUE_PAIRS.length} · Row {activeRow + 1}/{R}</span>
-          <div style={st.taskProgressTrack}>
-            <div style={{ ...st.taskProgressFill, width: `${pctPair}%` }} />
-          </div>
-        </div>
-
         <details style={st.taskGuide}>
-          <summary style={st.taskGuideSummary}>Scoring guide ⚙</summary>
+          <summary style={st.pairGuideSummary}>▣&nbsp; Scoring guide</summary>
           <div style={st.taskGuideBody}>
           {INSTRUCTION_SECTIONS.map((section) => {
             const band = bandOf(section.score);
@@ -427,95 +423,136 @@ export default function App() {
         </details>
       </header>
 
-      <p style={st.taskPrompt}>Select a cell, then press 1–4 to score. Blank cells are saved as 0 when you advance.</p>
-
-      <div style={{ ...st.gridScroll, ...st.taskGridScroll }}>
-        <table style={{ ...st.table, tableLayout: "fixed" }}>
-          <colgroup>
-            <col style={{ width: labelWidth }} />
-            {task.cols.map((cw) => <col key={cw} style={{ width: 78 }} />)}
-          </colgroup>
-          <thead>
-            <tr>
-              <th rowSpan={2} style={{ ...st.taskAxisHead, width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth }}>
-                {languageName(task.cueL1.lang, "Language 1")}
-              </th>
-              <th colSpan={C} style={st.taskAssociationHead}>
-                {languageName(task.cueL2.lang, "English")} associations
-              </th>
-            </tr>
-            <tr>
-              {task.cols.map((cw, c) => (
-                <th key={cw} style={{ ...st.colHead, ...st.taskColHead, ...(c === col ? st.headActive : {}), ...(c === 0 ? st.colHeadCue : {}) }}>
-                  {cw}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {task.rows.slice(0, activeRow + 1).map((rw, r) => {
-              const isActiveRow = r === activeRow;
-              return (
-                <tr key={rw.w} ref={isActiveRow ? activeRef : null}>
-                  <th style={{ ...st.rowHead, width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth, ...(isActiveRow ? st.headActive : {}), ...(r === 0 ? st.rowHeadCue : {}) }}>
-                    <span style={{ display: "block", fontFamily: FONT_CJK, fontSize: 17, fontWeight: 700 }}>{rw.w}</span>
-                  </th>
-                  {task.cols.map((cw, c) => {
-                    const v = explicit(r, c);
-                    const b = v !== undefined ? bandOf(v) : null;
-                    const isCol = isActiveRow && c === col;
-                    const isHover = isActiveRow && c === hoverCol;
-                    return (
-                      <td key={cw}
-                        onClick={isActiveRow ? () => setCol(c) : undefined}
-                        onMouseEnter={isActiveRow ? () => setHoverCol(c) : undefined}
-                        onMouseLeave={isActiveRow ? () => setHoverCol((current) => (current === c ? null : current)) : undefined}
-                        style={{
-                          ...st.taskCell,
-                          ...(b ? { background: b.c, color: b.ink } : {}),
-                          ...(v === 0 ? st.cellZero : {}),
-                          ...(isHover && !isCol ? st.cellHover : {}),
-                          ...(isCol && !b ? st.cellCursor : {}),
-                          cursor: isActiveRow ? "pointer" : "default",
-                        }}>
-                        {v !== undefined && v !== 0 ? v.toFixed(1) : ""}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div style={st.taskBottomBar}>
-        <span style={st.taskSaveStatus}>{saveErr ? "⚠ Save issue" : backendReady ? "✓ Saved on row advance" : "Preview mode"}</span>
-        <span style={st.hint}>Keys: <kbd style={st.kbd}>1</kbd> <kbd style={st.kbd}>2</kbd> <kbd style={st.kbd}>3</kbd> <kbd style={st.kbd}>4</kbd> · <kbd style={st.kbd}>Enter</kbd> next · <kbd style={st.kbd}>←</kbd><kbd style={st.kbd}>→</kbd> move</span>
-        <div style={st.taskScoreButtons}>
-          {BANDS.map((b) => (
-            <button key={b.v} onClick={() => setCell(col, b.v)} style={{ ...st.taskScoreButton, borderColor: b.c }}>
-              <span style={{ ...st.taskScoreKey, color: b.ink }}>{b.key}</span>
-              <span style={st.taskScoreLabel}>{b.label}</span>
-              <span style={st.taskScoreValue}>{b.v.toFixed(1)}</span>
-            </button>
-          ))}
+      <main style={st.pairPage}>
+        <div style={st.pairCueLabel}>Cue words</div>
+        <div style={st.pairCuePair}>
+          <div><b style={{ ...st.pairCueWord, fontFamily: FONT_CJK }}>{task.cueL1.w}</b><span style={st.pairLanguage}>{languageName(task.cueL1.lang, "Language 1")}</span></div>
+          <span style={st.pairArrow}>↔</span>
+          <div><b style={st.pairCueWord}>{task.cueL2.w}</b><span style={st.pairLanguage}>{languageName(task.cueL2.lang, "English")}</span></div>
         </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <button
-            style={{ ...st.secondary, padding: "10px 14px" }}
-            onClick={() => {
-              setIntroStartPage(3);
-              setStage("intro");
-            }}
-          >
-            ← Back to instructions
-          </button>
-          <button style={{ ...st.primary, ...st.taskNextButton }} onClick={advance}>
-            {activeRow + 1 < R ? "Next row →" : pair + 1 < CUE_PAIRS.length ? "Next matrix →" : "Finish"}
-          </button>
+        <button type="button" style={st.pairOverviewLink} onClick={() => setShowMatrixOverview(true)}>Open matrix overview</button>
+
+        <section style={st.pairQuestionCard}>
+          <h1 style={st.pairQuestionTitle}>{isCueCueCell ? "How equivalent are these cue words?" : "How equivalent are these associations?"}</h1>
+          <div style={st.pairAssociationGrid}>
+            <div style={st.pairAssociationCard}>
+              <span style={st.pairAssociationLanguage}>{languageName(task.cueL1.lang, "Language 1")} {isCueCueCell ? "cue word" : "association"}</span>
+              <b style={{ ...st.pairAssociationWord, fontFamily: FONT_CJK }}>{task.rows[activeRow].w}</b>
+            </div>
+            <span style={st.pairAssociationArrow}>↔</span>
+            <div style={st.pairAssociationCard}>
+              <span style={st.pairAssociationLanguage}>{languageName(task.cueL2.lang, "English")} {isCueCueCell ? "cue word" : "association"}</span>
+              <b style={st.pairAssociationWord}>{task.cols[col]}</b>
+            </div>
+          </div>
+          <p style={st.pairQuestionHint}>{isCueCueCell ? "These cue words anchor the matrix. Could one replace the other in context while keeping the meaning?" : "Could one replace the other in context while keeping the meaning?"}</p>
+        </section>
+
+        <div style={st.pairKeyHint}>Choose a score or press a keyboard key: <kbd style={st.pairKbd}>1</kbd><kbd style={st.pairKbd}>2</kbd><kbd style={st.pairKbd}>3</kbd><kbd style={st.pairKbd}>4</kbd></div>
+        <div style={st.pairScoreList}>
+          {BANDS.map((b) => {
+            const selected = currentValue === b.v;
+            const accent = b.v === 1.0 ? "#176b58" : b.v === 0.8 ? "#3f754c" : b.v === 0.5 ? "#ad6d00" : "#4b515a";
+            return (
+              <button
+                key={b.v}
+                type="button"
+                onClick={() => setCell(col, b.v)}
+                style={{ ...st.pairScoreOption, borderColor: b.c, ...(selected ? { background: b.c, boxShadow: `inset 0 0 0 1px ${b.ink}` } : {}) }}
+              >
+                <span style={st.pairPress}>Press <b style={{ ...st.pairPressKey, color: accent }}>{b.key}</b></span>
+                <strong style={{ ...st.pairScoreNumber, color: accent }}>{b.v.toFixed(1)}</strong>
+                <strong style={{ ...st.pairScoreName, color: accent }}>{b.label}</strong>
+                <span style={st.pairScoreDescription}>{b.blurb}</span>
+              </button>
+            );
+          })}
         </div>
-      </div>
+      </main>
+
+      <footer style={st.pairFooter}>
+        <button type="button" style={st.pairPrevious} onClick={previousCell} disabled={cellNumber === 1}>← Previous</button>
+        <div style={st.pairFooterStatus}>
+          <span>{saveErr ? "⚠ Save issue" : backendReady ? "Autosaved" : "Preview mode"} · Row {activeRow + 1} of {R}</span>
+          <span>Press 1–4 to score · Enter to continue</span>
+        </div>
+        <button type="button" style={st.pairNext} onClick={advance}>
+          {cellNumber < totalCells ? "Save & next →" : pair + 1 < CUE_PAIRS.length ? "Save & next matrix →" : "Save & finish →"}
+        </button>
+      </footer>
+
+      {showMatrixOverview && (
+        <div style={st.matrixOverlay} role="dialog" aria-modal="true" aria-label="Matrix overview">
+          <div style={st.matrixView}>
+            <header style={st.matrixViewToolbar}>
+              <div style={st.taskCuePair}>
+                <div><b style={{ ...st.taskCueWord, fontFamily: FONT_CJK }}>{task.cueL1.w}</b><span style={st.taskCueLanguage}>{languageName(task.cueL1.lang, "Language 1")}</span></div>
+                <span style={st.taskCueArrow}>↔</span>
+                <div><b style={st.taskCueWord}>{task.cueL2.w}</b><span style={st.taskCueLanguage}>{languageName(task.cueL2.lang, "English")}</span></div>
+              </div>
+              <div style={st.taskProgress}>
+                <span style={st.taskProgressText}>Matrix {pair + 1}/{CUE_PAIRS.length} · Row {activeRow + 1}/{R}</span>
+                <div style={st.taskProgressTrack}><div style={{ ...st.taskProgressFill, width: `${(activeRow / R) * 100}%` }} /></div>
+              </div>
+              <div style={st.matrixViewActions}>
+                <span style={{ color: "#176b68", fontWeight: 800 }}>Scoring guide ⚙</span>
+                <button type="button" style={st.secondary} onClick={() => setShowMatrixOverview(false)}>Pair-by-pair view</button>
+              </div>
+            </header>
+
+            <p style={st.taskPrompt}>Select a cell, then press 1–4 to score.</p>
+
+            <div style={{ ...st.gridScroll, ...st.matrixViewGrid }}>
+              <table style={{ ...st.table, tableLayout: "fixed" }}>
+                <colgroup><col style={{ width: labelWidth }} />{task.cols.map((cw) => <col key={cw} style={{ width: 82 }} />)}</colgroup>
+                <thead>
+                  <tr>
+                    <th rowSpan={2} style={{ ...st.taskAxisHead, width: labelWidth }}>{languageName(task.cueL1.lang, "Language 1")}</th>
+                    <th colSpan={C} style={st.taskAssociationHead}>{languageName(task.cueL2.lang, "English")} associations</th>
+                  </tr>
+                  <tr>{task.cols.map((cw, c) => <th key={cw} style={{ ...st.colHead, ...st.taskColHead, ...(c === 0 ? st.colHeadCue : {}) }}>{cw}</th>)}</tr>
+                </thead>
+                <tbody>
+                  {task.rows.map((rw, r) => (
+                    <tr key={rw.w}>
+                      <th style={{ ...st.rowHead, width: labelWidth, ...(r === 0 ? st.rowHeadCue : {}) }}>{rw.w}</th>
+                      {task.cols.map((cw, c) => {
+                        const value = explicit(r, c);
+                        const band = value !== undefined ? bandOf(value) : null;
+                        const selected = r === activeRow && c === col;
+                        return (
+                          <td
+                            key={cw}
+                            onClick={() => { setActiveRow(r); setCol(c); }}
+                            style={{ ...st.taskCell, ...(band ? { background: band.c, color: band.ink } : {}), ...(selected && !band ? st.cellCursor : {}), cursor: "pointer" }}
+                          >
+                            {value !== undefined && value !== 0 ? value.toFixed(1) : ""}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <footer style={st.matrixViewFooter}>
+              <span style={st.taskSaveStatus}>{saveErr ? "⚠ Save issue" : backendReady ? "✓ Autosaved" : "Preview mode"}</span>
+              <span style={st.hint}>Keys: <kbd style={st.kbd}>1</kbd> <kbd style={st.kbd}>2</kbd> <kbd style={st.kbd}>3</kbd> <kbd style={st.kbd}>4</kbd> to score · <kbd style={st.kbd}>Enter</kbd> next</span>
+              <div style={st.taskScoreButtons}>
+                {BANDS.map((b) => (
+                  <button key={b.v} onClick={() => setCell(col, b.v)} style={{ ...st.taskScoreButton, borderColor: b.c }}>
+                    <span style={{ ...st.taskScoreKey, color: b.v <= 0.5 ? b.ink : b.c }}>{b.key}</span>
+                    <span style={st.taskScoreLabel}>{b.label}</span>
+                    <span style={st.taskScoreValue}>{b.v.toFixed(1)}</span>
+                  </button>
+                ))}
+              </div>
+              <button type="button" style={{ ...st.primary, ...st.taskNextButton }} onClick={advance}>Next cell →</button>
+            </footer>
+          </div>
+        </div>
+      )}
       </Shell>
     </>
   );
@@ -918,6 +955,7 @@ function Practice({ examples, onBack, onComplete }) {
   const [scores, setScores] = useState({});
   const [rowFeedback, setRowFeedback] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [showPracticeOverview, setShowPracticeOverview] = useState(false);
   const example = examples[exampleIndex];
   const isLastExample = exampleIndex === examples.length - 1;
   const key = (r, c) => `${exampleIndex}|${r}|${c}`;
@@ -932,7 +970,6 @@ function Practice({ examples, onBack, onComplete }) {
 
   const setCell = (c, value) => {
     setScores((s) => ({ ...s, [key(activeRow, c)]: value }));
-    setCol((x) => Math.min(x + 1, example.cols.length - 1));
   };
 
   const advanceRow = () => {
@@ -943,6 +980,16 @@ function Practice({ examples, onBack, onComplete }) {
     });
     setScores(filled);
     setRowFeedback(true);
+  };
+
+  const advanceCell = () => {
+    if (col + 1 < example.cols.length) { setCol((c) => c + 1); return; }
+    advanceRow();
+  };
+
+  const previousCell = () => {
+    if (col > 0) { setCol((c) => c - 1); return; }
+    if (activeRow > 0) { setActiveRow((r) => r - 1); setCol(example.cols.length - 1); }
   };
 
   const continueAfterRowFeedback = () => {
@@ -1026,7 +1073,7 @@ function Practice({ examples, onBack, onComplete }) {
         setCol((c) => Math.max(c - 1, 0));
       } else if (event.key === "Enter") {
         event.preventDefault();
-        advanceRow();
+        advanceCell();
       }
     };
     window.addEventListener("keydown", handleKey);
@@ -1036,18 +1083,14 @@ function Practice({ examples, onBack, onComplete }) {
   return (
     <Shell wide>
       <div style={{ padding: "20px 0 60px" }}>
-        <header style={st.taskToolbar}>
-          <div style={st.taskCuePair}>
-            <div><b style={{ ...st.taskCueWord, fontFamily: FONT_CJK }}>{example.cueL1.w}</b><span style={st.taskCueLanguage}>{languageName(example.cueL1.lang, "Language 1")}</span></div>
-            <span style={st.taskCueArrow}>↔</span>
-            <div><b style={st.taskCueWord}>{example.cueL2.w}</b><span style={st.taskCueLanguage}>{languageName(example.cueL2.lang, "English")}</span></div>
-          </div>
-          <div style={st.taskProgress}>
-            <span style={st.taskProgressText}>Practice {exampleIndex + 1}/{examples.length} · Row {Math.min(activeRow + 1, example.rows.length)}/{example.rows.length}</span>
-            <div style={st.taskProgressTrack}><div style={{ ...st.taskProgressFill, width: `${showFeedback ? 100 : (activeRow / example.rows.length) * 100}%` }} /></div>
+        <header style={st.pairTopBar}>
+          <span style={st.pairMatrixCount}>Practice {exampleIndex + 1} of {examples.length}</span>
+          <div style={st.pairCellProgress}>
+            <span>Cell {activeRow * example.cols.length + col + 1} of {totalCells}</span>
+            <div style={st.taskProgressTrack}><div style={{ ...st.taskProgressFill, width: `${((activeRow * example.cols.length + col) / totalCells) * 100}%` }} /></div>
           </div>
           <details style={st.taskGuide}>
-            <summary style={st.taskGuideSummary}>Scoring guide ⚙</summary>
+            <summary style={st.pairGuideSummary}>▣&nbsp; Scoring guide</summary>
             <div style={st.taskGuideBody}>
             {INSTRUCTION_SECTIONS.map((section) => {
               const band = bandOf(section.score);
@@ -1072,95 +1115,46 @@ function Practice({ examples, onBack, onComplete }) {
           </details>
         </header>
 
-        <p style={st.taskPrompt}><b>{example.label}:</b> {example.context} Select a cell, then press 1–4 to score.</p>
-
-        <div style={{ ...st.gridScroll, ...st.taskGridScroll }}>
-          <table style={{ ...st.table, tableLayout: "fixed" }}>
-            <colgroup>
-              <col style={{ width: labelWidth }} />
-              {example.cols.map((word) => <col key={word} />)}
-            </colgroup>
-            <thead>
-              <tr>
-                <th rowSpan={2} style={{ ...st.taskAxisHead, width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth }}>
-                  {languageName(example.cueL1.lang, "Language 1")}
-                </th>
-                <th colSpan={example.cols.length} style={st.taskAssociationHead}>
-                  {languageName(example.cueL2.lang, "English")} associations
-                </th>
-              </tr>
-              <tr>
-                {example.cols.map((word, c) => (
-                  <th key={word} style={{ ...st.colHead, ...st.taskColHead, ...(!showFeedback && !rowFeedback && c === col ? st.headActive : {}), ...(c === 0 ? st.colHeadCue : {}) }}>
-                    {word}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {example.rows.slice(0, visibleRows).map((row, r) => {
-                const state = showFeedback || rowFeedback || r < activeRow ? "done" : "active";
-                return (
-                  <tr key={row.w}>
-                    <th style={{ ...st.rowHead, width: labelWidth, minWidth: labelWidth, maxWidth: labelWidth, ...(state === "active" ? st.headActive : {}), ...(r === 0 ? st.rowHeadCue : {}) }}>
-                      <span style={{ display: "block", fontFamily: FONT_CJK, fontSize: 17, fontWeight: 700 }}>{row.w}</span>
-                      <span style={st.rowHeadGloss}>{row.gloss}</span>
-                    </th>
-                    {example.cols.map((word, c) => {
-                      const value = explicit(r, c) ?? (state === "done" ? 0.0 : undefined);
-                      const band = value !== undefined ? bandOf(value) : null;
-                      const editable = state === "active" && !showFeedback && !rowFeedback;
-                      const isCol = editable && c === col;
-                      const isHover = editable && c === hoverCol;
-                      const reviewed = rowFeedback && r === activeRow;
-                      const correct = reviewed && value === example.answers[r][c];
-                      return (
-                        <td
-                          key={word}
-                          onClick={editable ? () => setCol(c) : undefined}
-                          onMouseEnter={editable ? () => setHoverCol(c) : undefined}
-                          onMouseLeave={editable ? () => setHoverCol((current) => (current === c ? null : current)) : undefined}
-                          style={{
-                            ...st.taskCell,
-                            ...(band ? { background: band.c, color: band.ink } : {}),
-                            ...(state === "done" && value === 0 ? st.cellZero : {}),
-                            ...(isHover && !isCol ? st.cellHover : {}),
-                            ...(isCol && !band ? st.cellCursor : {}),
-                            ...(reviewed ? { boxShadow: correct ? "inset 0 0 0 3px #2f855a" : "inset 0 0 0 3px #c05640" } : {}),
-                            cursor: editable ? "pointer" : "default",
-                          }}
-                        >
-                          {value !== undefined && value !== 0 ? value.toFixed(1) : ""}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
+        {!showFeedback && !rowFeedback && (
+          <main style={st.pairPage}>
+            <div style={st.pairCueLabel}>Cue words</div>
+            <div style={st.pairCuePair}>
+              <div><b style={{ ...st.pairCueWord, fontFamily: FONT_CJK }}>{example.cueL1.w}</b><span style={st.pairLanguage}>{languageName(example.cueL1.lang, "Language 1")}</span></div>
+              <span style={st.pairArrow}>↔</span>
+              <div><b style={st.pairCueWord}>{example.cueL2.w}</b><span style={st.pairLanguage}>{languageName(example.cueL2.lang, "English")}</span></div>
+            </div>
+            <button type="button" style={st.pairOverviewLink} onClick={() => setShowPracticeOverview(true)}>Open matrix overview</button>
+            <p style={{ ...st.taskPrompt, textAlign: "center" }}><b>{example.label}:</b> {example.context}</p>
+            <section style={st.pairQuestionCard}>
+              <h1 style={st.pairQuestionTitle}>{activeRow === 0 && col === 0 ? "How equivalent are these cue words?" : "How equivalent are these associations?"}</h1>
+              <div style={st.pairAssociationGrid}>
+                <div style={st.pairAssociationCard}><span style={st.pairAssociationLanguage}>{languageName(example.cueL1.lang, "Language 1")} {activeRow === 0 && col === 0 ? "cue word" : "association"}</span><b style={{ ...st.pairAssociationWord, fontFamily: FONT_CJK }}>{example.rows[activeRow].w}</b></div>
+                <span style={st.pairAssociationArrow}>↔</span>
+                <div style={st.pairAssociationCard}><span style={st.pairAssociationLanguage}>{languageName(example.cueL2.lang, "English")} {activeRow === 0 && col === 0 ? "cue word" : "association"}</span><b style={st.pairAssociationWord}>{example.cols[col]}</b></div>
+              </div>
+              <p style={st.pairQuestionHint}>{activeRow === 0 && col === 0 ? "These cue words anchor the matrix. Could one replace the other in context while keeping the meaning?" : "Could one replace the other in context while keeping the meaning?"}</p>
+            </section>
+            <div style={st.pairScoreList}>
+              {BANDS.map((band) => {
+                const accent = band.v === 1 ? "#176b58" : band.v === 0.8 ? "#3f754c" : band.v === 0.5 ? "#ad6d00" : "#4b515a";
+                const selected = explicit(activeRow, col) === band.v;
+                return <button key={band.v} onClick={() => setCell(col, band.v)} style={{ ...st.pairScoreOption, borderColor: band.c, ...(selected ? { background: `${band.c}18`, boxShadow: `inset 0 0 0 2px ${accent}` } : {}) }}>
+                  <span style={st.pairPress}>Press <b style={{ ...st.pairPressKey, color: accent }}>{band.key}</b></span>
+                  <strong style={{ ...st.pairScoreNumber, color: accent }}>{band.v.toFixed(1)}</strong>
+                  <strong style={{ ...st.pairScoreName, color: accent }}>{band.label}</strong>
+                  <span style={st.pairScoreDescription}>{band.blurb}</span>
+                </button>;
               })}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </main>
+        )}
 
         {!showFeedback && !rowFeedback && (
-          <div style={st.taskBottomBar}>
-            <span style={st.taskSaveStatus}>Practice mode</span>
-            <span style={st.hint}>Keys: <kbd style={st.kbd}>1</kbd> <kbd style={st.kbd}>2</kbd> <kbd style={st.kbd}>3</kbd> <kbd style={st.kbd}>4</kbd> · <kbd style={st.kbd}>Enter</kbd> next</span>
-            <div style={st.taskScoreButtons}>
-              {BANDS.map((band) => (
-                <button key={band.v} onClick={() => setCell(col, band.v)} style={{ ...st.taskScoreButton, borderColor: band.c }}>
-                  <span style={{ ...st.taskScoreKey, color: band.ink }}>{band.key}</span>
-                  <span style={st.taskScoreLabel}>{band.label}</span>
-                  <span style={st.taskScoreValue}>{band.v.toFixed(1)}</span>
-                </button>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button style={{ ...st.secondary, padding: "10px 14px" }} onClick={onBack}>← Back to instructions</button>
-              <button style={{ ...st.primary, ...st.taskNextButton }} onClick={advanceRow}>
-                {activeRow + 1 < example.rows.length ? "Next row →" : "Check my matrix →"}
-              </button>
-            </div>
-          </div>
+          <footer style={st.pairFooter}>
+            <button style={st.pairPrevious} onClick={previousCell} disabled={activeRow === 0 && col === 0}>← Previous</button>
+            <div style={st.pairFooterStatus}><span>Practice · Row {activeRow + 1} of {example.rows.length}</span><span>Press 1–4 to score · Enter to continue</span></div>
+            <button style={st.pairNext} onClick={advanceCell}>{col + 1 < example.cols.length ? "Next pair →" : "Check row →"}</button>
+          </footer>
         )}
 
         {rowFeedback && (
@@ -1203,6 +1197,9 @@ function Practice({ examples, onBack, onComplete }) {
 
         {showFeedback && (
           <div role="status">
+            <button type="button" style={{ ...st.secondary, marginBottom: 14 }} onClick={() => setShowPracticeOverview(true)}>
+              Open completed matrix overview
+            </button>
             <div style={{ ...st.practiceFeedback, ...(results.length === 0 ? st.practiceFeedbackCorrect : st.practiceFeedbackError) }}>
               <strong>
                 {results.length === 0
@@ -1235,6 +1232,77 @@ function Practice({ examples, onBack, onComplete }) {
             </div>
           </div>
         )}
+
+        {showPracticeOverview && (
+          <div style={st.matrixOverlay} role="dialog" aria-modal="true" aria-label="Practice matrix overview">
+            <div style={st.matrixView}>
+              <header style={st.matrixViewToolbar}>
+                <div style={st.taskCuePair}>
+                  <div><b style={{ ...st.taskCueWord, fontFamily: FONT_CJK }}>{example.cueL1.w}</b><span style={st.taskCueLanguage}>{languageName(example.cueL1.lang, "Language 1")}</span></div>
+                  <span style={st.taskCueArrow}>↔</span>
+                  <div><b style={st.taskCueWord}>{example.cueL2.w}</b><span style={st.taskCueLanguage}>{languageName(example.cueL2.lang, "English")}</span></div>
+                </div>
+                <div style={st.taskProgress}>
+                  <span style={st.taskProgressText}>Practice {exampleIndex + 1}/{examples.length} · {showFeedback ? "Complete" : `Row ${activeRow + 1}/${example.rows.length}`}</span>
+                  <div style={st.taskProgressTrack}><div style={{ ...st.taskProgressFill, width: `${showFeedback ? 100 : ((activeRow * example.cols.length + col) / totalCells) * 100}%` }} /></div>
+                </div>
+                <div style={st.matrixViewActions}>
+                  <span style={{ color: "#176b68", fontWeight: 800 }}>{showFeedback ? "Completed matrix" : "Progress so far"}</span>
+                  <button type="button" style={st.secondary} onClick={() => setShowPracticeOverview(false)}>Pair-by-pair view</button>
+                </div>
+              </header>
+
+              <p style={st.taskPrompt}>
+                {showFeedback ? "The full annotated matrix is shown. Select any cell to revisit it." : "Only rows reached so far are shown. Select a visited cell to revisit it."}
+              </p>
+
+              <div style={{ ...st.gridScroll, ...st.matrixViewGrid }}>
+                <table style={{ ...st.table, tableLayout: "fixed" }}>
+                  <colgroup><col style={{ width: labelWidth }} />{example.cols.map((word) => <col key={word} style={{ width: 100 }} />)}</colgroup>
+                  <thead>
+                    <tr>
+                      <th rowSpan={2} style={{ ...st.taskAxisHead, width: labelWidth }}>{languageName(example.cueL1.lang, "Language 1")}</th>
+                      <th colSpan={example.cols.length} style={st.taskAssociationHead}>{languageName(example.cueL2.lang, "English")} associations</th>
+                    </tr>
+                    <tr>{example.cols.map((word, c) => <th key={word} style={{ ...st.colHead, ...st.taskColHead, ...(c === 0 ? st.colHeadCue : {}) }}>{word}</th>)}</tr>
+                  </thead>
+                  <tbody>
+                    {example.rows.slice(0, showFeedback ? example.rows.length : activeRow + 1).map((row, r) => (
+                      <tr key={row.w}>
+                        <th style={{ ...st.rowHead, width: labelWidth, ...(r === 0 ? st.rowHeadCue : {}) }}>{row.w}</th>
+                        {example.cols.map((word, c) => {
+                          const value = explicit(r, c);
+                          const band = value !== undefined ? bandOf(value) : null;
+                          return (
+                            <td
+                              key={word}
+                              onClick={() => {
+                                setActiveRow(r);
+                                setCol(c);
+                                setRowFeedback(false);
+                                setShowFeedback(false);
+                                setShowPracticeOverview(false);
+                              }}
+                              style={{ ...st.taskCell, ...(band ? { background: band.c, color: band.ink } : {}), cursor: "pointer" }}
+                            >
+                              {value !== undefined && value !== 0 ? value.toFixed(1) : ""}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <footer style={st.matrixViewFooter}>
+                <span style={st.taskSaveStatus}>{showFeedback ? "✓ Practice matrix complete" : `✓ ${activeRow * example.cols.length + col + 1} of ${totalCells} pairs reached`}</span>
+                <span style={st.hint}>Select a displayed cell to revisit its pair.</span>
+                <button type="button" style={{ ...st.primary, ...st.taskNextButton }} onClick={() => setShowPracticeOverview(false)}>Return to pairs →</button>
+              </footer>
+            </div>
+          </div>
+        )}
       </div>
     </Shell>
   );
@@ -1256,7 +1324,6 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
 
   const setCell = (c, value) => {
     setScores((current) => ({ ...current, [key(activeRow, c)]: value }));
-    setCol((current) => Math.min(current + 1, testExample.cols.length - 1));
   };
 
   const advance = () => {
@@ -1278,6 +1345,16 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
     const passed = wrong.length === 0;
     setWrongCells(wrong);
     setResult(passed ? "passed" : "failed");
+  };
+
+  const advanceCell = () => {
+    if (col + 1 < testExample.cols.length) { setCol((c) => c + 1); return; }
+    advance();
+  };
+
+  const previousCell = () => {
+    if (col > 0) { setCol((c) => c - 1); return; }
+    if (activeRow > 0) { setActiveRow((r) => r - 1); setCol(testExample.cols.length - 1); }
   };
 
   const submitCorrections = () => {
@@ -1308,7 +1385,7 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
       } else if (event.key === "Enter") {
         event.preventDefault();
         if (editingCorrections) submitCorrections();
-        else advance();
+        else advanceCell();
       }
     };
     window.addEventListener("keydown", handleKey);
@@ -1318,18 +1395,14 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
   return (
     <Shell wide>
       <div style={{ padding: "20px 0 60px" }}>
-        <header style={st.taskToolbar}>
-          <div style={st.taskCuePair}>
-            <div><b style={{ ...st.taskCueWord, fontFamily: FONT_CJK }}>{testExample.cueL1.w}</b><span style={st.taskCueLanguage}>{languageName(testExample.cueL1.lang, "Language 1")}</span></div>
-            <span style={st.taskCueArrow}>↔</span>
-            <div><b style={st.taskCueWord}>{testExample.cueL2.w}</b><span style={st.taskCueLanguage}>{languageName(testExample.cueL2.lang, "English")}</span></div>
-          </div>
-          <div style={st.taskProgress}>
-            <span style={st.taskProgressText}>Qualification test · Attempt {attempt} · Row {Math.min(activeRow + 1, testExample.rows.length)}/{testExample.rows.length}</span>
-            <div style={st.taskProgressTrack}><div style={{ ...st.taskProgressFill, width: `${result ? 100 : (activeRow / testExample.rows.length) * 100}%` }} /></div>
+        <header style={st.pairTopBar}>
+          <span style={st.pairMatrixCount}>Qualification test · Attempt {attempt}</span>
+          <div style={st.pairCellProgress}>
+            <span>Cell {activeRow * testExample.cols.length + col + 1} of {testExample.rows.length * testExample.cols.length}</span>
+            <div style={st.taskProgressTrack}><div style={{ ...st.taskProgressFill, width: `${result ? 100 : ((activeRow * testExample.cols.length + col) / (testExample.rows.length * testExample.cols.length)) * 100}%` }} /></div>
           </div>
           <details style={st.taskGuide}>
-            <summary style={st.taskGuideSummary}>Scoring guide ⚙</summary>
+            <summary style={st.pairGuideSummary}>▣&nbsp; Scoring guide</summary>
             <div style={st.taskGuideBody}>
             {INSTRUCTION_SECTIONS.map((section) => {
               const band = bandOf(section.score);
@@ -1370,6 +1443,39 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
           </div>
         )}
 
+        {!result && (
+          <main style={st.pairPage}>
+            <div style={st.pairCueLabel}>Cue words</div>
+            <div style={st.pairCuePair}>
+              <div><b style={{ ...st.pairCueWord, fontFamily: FONT_CJK }}>{testExample.cueL1.w}</b><span style={st.pairLanguage}>{languageName(testExample.cueL1.lang, "Language 1")}</span></div>
+              <span style={st.pairArrow}>↔</span>
+              <div><b style={st.pairCueWord}>{testExample.cueL2.w}</b><span style={st.pairLanguage}>{languageName(testExample.cueL2.lang, "English")}</span></div>
+            </div>
+            <section style={st.pairQuestionCard}>
+              <h1 style={st.pairQuestionTitle}>{activeRow === 0 && col === 0 ? "How equivalent are these cue words?" : "How equivalent are these associations?"}</h1>
+              <div style={st.pairAssociationGrid}>
+                <div style={st.pairAssociationCard}><span style={st.pairAssociationLanguage}>{languageName(testExample.cueL1.lang, "Language 1")} {activeRow === 0 && col === 0 ? "cue word" : "association"}</span><b style={{ ...st.pairAssociationWord, fontFamily: FONT_CJK }}>{testExample.rows[activeRow].w}</b></div>
+                <span style={st.pairAssociationArrow}>↔</span>
+                <div style={st.pairAssociationCard}><span style={st.pairAssociationLanguage}>{languageName(testExample.cueL2.lang, "English")} {activeRow === 0 && col === 0 ? "cue word" : "association"}</span><b style={st.pairAssociationWord}>{testExample.cols[col]}</b></div>
+              </div>
+              <p style={st.pairQuestionHint}>{activeRow === 0 && col === 0 ? "These cue words anchor the matrix. Could one replace the other in context while keeping the meaning?" : "Could one replace the other in context while keeping the meaning?"}</p>
+            </section>
+            <div style={st.pairScoreList}>
+              {BANDS.map((band) => {
+                const accent = band.v === 1 ? "#176b58" : band.v === 0.8 ? "#3f754c" : band.v === 0.5 ? "#ad6d00" : "#4b515a";
+                const selected = explicit(activeRow, col) === band.v;
+                return <button key={band.v} onClick={() => setCell(col, band.v)} style={{ ...st.pairScoreOption, borderColor: band.c, ...(selected ? { background: `${band.c}18`, boxShadow: `inset 0 0 0 2px ${accent}` } : {}) }}>
+                  <span style={st.pairPress}>Press <b style={{ ...st.pairPressKey, color: accent }}>{band.key}</b></span>
+                  <strong style={{ ...st.pairScoreNumber, color: accent }}>{band.v.toFixed(1)}</strong>
+                  <strong style={{ ...st.pairScoreName, color: accent }}>{band.label}</strong>
+                  <span style={st.pairScoreDescription}>{band.blurb}</span>
+                </button>;
+              })}
+            </div>
+          </main>
+        )}
+
+        {result && (
         <div style={{ ...st.gridScroll, ...st.taskGridScroll }}>
           <table style={{ ...st.table, tableLayout: "fixed" }}>
             <colgroup>
@@ -1438,27 +1544,14 @@ function QualificationTest({ example: testExample, onBack, onPass }) {
             </tbody>
           </table>
         </div>
+        )}
 
         {!result && (
-          <div style={st.taskBottomBar}>
-            <span style={st.taskSaveStatus}>Qualification test</span>
-            <span style={st.hint}>Keys: <kbd style={st.kbd}>1</kbd> <kbd style={st.kbd}>2</kbd> <kbd style={st.kbd}>3</kbd> <kbd style={st.kbd}>4</kbd> · <kbd style={st.kbd}>Enter</kbd> next</span>
-            <div style={st.taskScoreButtons}>
-              {BANDS.map((band) => (
-                <button key={band.v} onClick={() => setCell(col, band.v)} style={{ ...st.taskScoreButton, borderColor: band.c }}>
-                  <span style={{ ...st.taskScoreKey, color: band.ink }}>{band.key}</span>
-                  <span style={st.taskScoreLabel}>{band.label}</span>
-                  <span style={st.taskScoreValue}>{band.v.toFixed(1)}</span>
-                </button>
-              ))}
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button style={{ ...st.secondary, padding: "10px 14px" }} onClick={onBack}>← Back to practice</button>
-              <button style={{ ...st.primary, ...st.taskNextButton }} onClick={advance}>
-                {activeRow + 1 < testExample.rows.length ? "Next row →" : "Submit test →"}
-              </button>
-            </div>
-          </div>
+          <footer style={st.pairFooter}>
+            <button style={st.pairPrevious} onClick={previousCell} disabled={activeRow === 0 && col === 0}>← Previous</button>
+            <div style={st.pairFooterStatus}><span>Qualification test · Row {activeRow + 1} of {testExample.rows.length}</span><span>Press 1–4 to score · Enter to continue</span></div>
+            <button style={st.pairNext} onClick={advanceCell}>{col + 1 < testExample.cols.length ? "Save & next →" : activeRow + 1 < testExample.rows.length ? "Next row →" : "Submit test →"}</button>
+          </footer>
         )}
 
         {result === "failed" && editingCorrections && (
@@ -1692,8 +1785,8 @@ function Intro({ initialPage = 1, pid, selectedLanguage, onLanguageChange, onSta
         <h2 style={st.sectionTitle}>Example of the annotation UI</h2>
         <p style={st.lead}>
           On screen, you'll be given a cue pair — here, <b style={{ fontFamily: FONT_CJK }}>{workedSource.cueL1.w}</b> ↔ <b>{workedSource.cueL2.w}</b>,
-          as shown in the top-left corner of the matrix. The first row and first column are the cue words themselves.
-          From the second row and second column onward are the <b>associations</b> for each cue word: columns are associations in English, rows are associations in the other language. The matrix starts empty, like this:
+          as shown in the top-left corner of the matrix. The row2 and column 2 (in red color) are the cue words themselves.
+          From the third row and third column onward are the <b>associations</b> for each cue word: columns are associations in English, rows are associations in the other language. The matrix starts empty, like this:
         </p>
 
         <ExampleMatrixTable matrix={emptyWorkedMatrix} highlightCorner />
@@ -1794,6 +1887,45 @@ const st = {
   taskScoreLabel: { color: "#26292e", fontSize: 13, fontWeight: 750, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" },
   taskScoreValue: { gridColumn: "1 / -1", color: "#26292e", fontSize: 13, lineHeight: 1.2, textAlign: "center" },
   taskNextButton: { background: "#176b68", minHeight: 52, padding: "11px 20px" },
+
+  pairTopBar: { position: "sticky", top: 0, zIndex: 30, display: "grid", gridTemplateColumns: "1fr minmax(260px,380px) 1fr", alignItems: "center", gap: 24, background: "rgba(255,255,255,.98)", borderBottom: "1px solid #e3e0d8", padding: "12px 0 14px", marginBottom: 18 },
+  pairMatrixCount: { fontSize: 14, color: "#26292e" },
+  pairCellProgress: { display: "grid", gap: 7, textAlign: "center", fontSize: 14, fontWeight: 700 },
+  pairGuideSummary: { listStyle: "none", cursor: "pointer", color: "#176b68", border: "1px solid #58717a", borderRadius: 7, padding: "9px 14px", fontSize: 14, fontWeight: 800, whiteSpace: "nowrap" },
+  pairPage: { maxWidth: 760, margin: "0 auto", textAlign: "center" },
+  pairCueLabel: { color: "#4b515a", fontSize: 14, marginBottom: 8 },
+  pairCuePair: { display: "grid", gridTemplateColumns: "minmax(150px,max-content) 54px minmax(150px,max-content)", alignItems: "start", justifyContent: "center", marginBottom: 10 },
+  pairCueWord: { display: "block", fontSize: 30, lineHeight: 1.1 },
+  pairLanguage: { display: "block", marginTop: 6, color: "#5b636e", fontSize: 13 },
+  pairArrow: { paddingTop: 5, color: "#5b636e", fontSize: 26 },
+  pairOverviewLink: { background: "none", border: "none", padding: 3, color: "#176b68", fontSize: 13, fontWeight: 700, marginBottom: 16 },
+  pairQuestionCard: { background: "#fff", border: "1px solid #d8d4ca", borderRadius: 9, padding: "18px 24px 14px", marginBottom: 14 },
+  pairQuestionTitle: { margin: "0 0 15px", fontSize: 21, lineHeight: 1.25 },
+  pairAssociationGrid: { display: "grid", gridTemplateColumns: "1fr 72px 1fr", alignItems: "center" },
+  pairAssociationCard: { display: "grid", alignContent: "center", minHeight: 118, background: "#fff", border: "1px solid #d8d4ca", borderRadius: 8, padding: "14px 18px" },
+  pairAssociationLanguage: { color: "#5b636e", fontSize: 13, marginBottom: 12 },
+  pairAssociationWord: { fontSize: 38, lineHeight: 1.05 },
+  pairAssociationArrow: { color: "#5b636e", fontSize: 34 },
+  pairQuestionHint: { margin: "14px 0 0", color: "#4b515a", fontSize: 13 },
+  pairKeyHint: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, color: "#26292e", fontSize: 13, marginBottom: 9 },
+  pairKbd: { display: "inline-grid", placeItems: "center", width: 34, height: 32, background: "#fff", border: "1px solid #c7c7c2", borderRadius: 5, boxShadow: "0 2px 2px rgba(38,41,46,.2)", fontSize: 17, fontWeight: 800 },
+  pairScoreList: { display: "grid", gap: 6, marginBottom: 18 },
+  pairScoreOption: { display: "grid", gridTemplateColumns: "105px 58px 190px 1fr", alignItems: "center", gap: 10, minHeight: 50, background: "#fff", border: "1.5px solid", borderRadius: 7, padding: "7px 10px", textAlign: "left" },
+  pairPress: { justifySelf: "start", minWidth: 90, background: "#fff", border: "1px solid #c7c7c2", borderRadius: 5, padding: "6px 9px", boxShadow: "0 2px 2px rgba(38,41,46,.18)", fontSize: 13 },
+  pairPressKey: { color: "#26292e", fontSize: 17, fontWeight: 800 },
+  pairScoreNumber: { fontSize: 20 },
+  pairScoreName: { fontSize: 14 },
+  pairScoreDescription: { color: "#26292e", fontSize: 12.5 },
+  pairFooter: { position: "sticky", bottom: 0, zIndex: 30, display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", gap: 20, background: "rgba(255,255,255,.98)", borderTop: "1px solid #e3e0d8", padding: "13px 0 4px" },
+  pairPrevious: { justifySelf: "start", background: "#fff", color: "#176b68", border: "1px solid #58717a", borderRadius: 7, padding: "11px 16px", fontSize: 13, fontWeight: 700 },
+  pairFooterStatus: { display: "grid", gap: 5, color: "#4b515a", fontSize: 12.5, textAlign: "center" },
+  pairNext: { justifySelf: "end", background: "#176b68", color: "#fff", border: "none", borderRadius: 7, padding: "13px 20px", fontSize: 14, fontWeight: 800 },
+  matrixOverlay: { position: "fixed", inset: 0, zIndex: 100, background: "#f7f6f2", overflow: "hidden" },
+  matrixView: { display: "grid", gridTemplateRows: "auto auto minmax(0,1fr) auto", width: "100%", height: "100vh", padding: "0 18px" },
+  matrixViewToolbar: { display: "grid", gridTemplateColumns: "minmax(240px,1fr) minmax(260px,360px) minmax(280px,1fr)", alignItems: "center", gap: 24, background: "#fff", borderBottom: "1px solid #e3e0d8", padding: "13px 10px" },
+  matrixViewActions: { display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 22, fontSize: 13 },
+  matrixViewGrid: { minHeight: 0, maxHeight: "none", marginBottom: 0, borderRadius: 7, overflow: "auto" },
+  matrixViewFooter: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 14, background: "#fff", borderTop: "1px solid #e3e0d8", padding: "12px 10px" },
 
   progWrap: { display: "flex", alignItems: "center", gap: 12, marginBottom: 14 },
   progBar: { flex: 1, height: 6, background: "#e3e0d8", borderRadius: 99, overflow: "hidden" },
